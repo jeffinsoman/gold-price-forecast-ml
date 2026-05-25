@@ -1,170 +1,114 @@
-# gold-price-forecast-ml – ML Trading System
+# Gold Price (XAUUSD) Directional Forecasting using XGBoost
 
-[![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![ML](https://img.shields.io/badge/Machine%20Learning-XGBoost-orange)](https://xgboost.ai/)
-[![Status](https://img.shields.io/badge/Status-Active-brightgreen)]()
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
+![XGBoost](https://img.shields.io/badge/Model-XGBoost-orange)
+![Status](https://img.shields.io/badge/Status-Completed-success)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-End-to-end machine learning pipeline for predicting XAUUSD (Gold vs USD) price movements.
+An end-to-end Machine Learning pipeline designed to forecast the daily directional movement of Gold (XAUUSD) using historical market data, technical indicators, and gradient boosting algorithms. 
+
+This repository demonstrates data engineering, time-series feature extraction, out-of-sample model evaluation, and simulated algorithmic trading performance.
 
 ---
 
 ## Table of Contents
-
-- [Overview](#overview)
-- [Project Structure](#project-structure)
-- [Quick Start](#quick-start)
-- [Models & Performance](#models--performance)
-- [Technologies Used](#technologies-used)
-- [Feature Engineering](#feature-engineering)
-- [Results Visualization](#results-visualization)
-- [Future Roadmap](#future-roadmap)
-- [Contributing](#contributing)
-- [Disclaimer](#disclaimer)
-- [Contact](#contact)
-- [License](#license)
+1. [Project Overview](#project-overview)
+2. [Project Structure](#project-structure)
+3. [Data & Feature Engineering](#data--feature-engineering)
+4. [Models & Performance](#models--performance)
+5. [Results & Visualizations](#results--visualizations)
+6. [How to Run (Local Setup)](#how-to-run-local-setup)
+7. [Disclaimer](#disclaimer)
 
 ---
 
-## Overview
+## Project Overview
 
-This project implements a complete machine learning pipeline for predicting XAUUSD (Gold/US Dollar) price direction. Using historical forex data, feature engineering, and advanced ensemble methods, the system aims to forecast short-term price movements.
-
-Key Features:
-
-- Automated Data Pipeline – Fetch, clean, and preprocess historical XAUUSD data
-- Feature Engineering – Technical indicators (RSI, MACD, Bollinger Bands, Fibonacci)
-- Multiple ML Models – XGBoost, Random Forest, LSTM Neural Networks
-- Backtesting Engine – Simulate real trading with realistic transaction costs
-- Performance Metrics – Sharpe ratio, max drawdown, win rate, profit factor
+The goal of this project is to predict whether the closing price of XAUUSD will be strictly higher (1) or lower (0) on the following trading day. By treating market forecasting as a binary classification problem, this pipeline builds a foundational quantitative trading model that can be expanded into automated algorithmic trading systems.
 
 ## Project Structure
 
 ```text
 gold-price-forecast-ml/
+│
 ├── data/
-│   ├── raw/                 # Data historis mentah XAUUSD (misal dari OANDA/MT4)
-│   ├── processed/           # Data bersih yang sudah dinormalisasi dan ditambah fitur teknikal
-│   └── external/            # Data pendukung (misal: kalender ekonomi, data indeks DXY)
-├── notebooks/               # Jupyter/R notebooks untuk EDA dan eksperimen awal
-│   ├── 01_data_exploration.ipynb
-│   └── 02_feature_engineering.ipynb
-├── src/                     # Source code utama (Pipeline)
-│   ├── __init__.py
-│   ├── data_loader.py       # Script penarikan data via API broker
-│   ├── features.py          # Script pembuatan fitur prediktif (RSI, MACD, Price Action)
-│   ├── train.py             # Script pelatihan model (XGBoost, dll)
-│   └── evaluate.py          # Evaluasi metrik model (MSE, Cross-Validation, Sharpe Ratio)
-├── models/                  # File model prediktif yang sudah dilatih dan divalidasi (misal: .pkl / .rds)
-├── requirements.txt         # Daftar dependensi library (pandas, scikit-learn, xgboost, dll)
-├── config.yaml              # Konfigurasi parameter (timeframe 5m/1h, hyperparameter model)
-└── README.md                # Dokumentasi utama proyek
+│   ├── raw/                  # Raw historical OHLCV data
+│   └── processed/            # Cleaned data with engineered features
+├── docs/
+│   └── images/               # Generated charts and visual results
+├── models/                   # Serialized ML models (e.g., .pkl)
+├── Src/
+│   ├── data_loader.py        # Automated data ingestion script
+│   ├── features.py           # Technical indicator and feature engineering
+│   ├── train.py              # Model training and evaluation script
+│   └── evaluate.py           # Equity curve simulation and feature importance
+├── config.yaml               # Global parameters and hyperparameters
+├── requirements.txt          # Project dependencies
+└── README.md                 # Project documentation
 ```
 
-## Quick Start
+## Data & Feature Engineering
 
-Get the pipeline running locally in a few steps.
+Historical daily data is retrieved automatically via `yfinance`. Raw OHLCV (Open, High, Low, Close, Volume) data alone is often insufficient for robust machine learning models. This pipeline extracts several technical and statistical features to capture market microstructure and momentum:
 
-### 1. Clone the repo
-```bash
-git clone [https://github.com/yourusername/gold-price-forecast-ml.git](https://github.com/yourusername/gold-price-forecast-ml.git)
-cd gold-price-forecast-ml
-```
-
-### 2. Set up environment
-It's recommended to use a virtual environment to keep dependencies isolated.
-```bash
-python -m venv venv
-
-# Activate environment
-source venv/bin/activate  # On Linux/Mac
-venv\Scripts\activate     # On Windows
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### 3. Run the pipeline
-Execute the pipeline sequentially:
-```bash
-python src/data_loader.py  # Fetch historical XAUUSD data
-python src/features.py     # Engineer features (RSI, MACD, etc.)
-python src/train.py        # Train the XGBoost model
-python src/evaluate.py     # Output evaluation metrics
-```
+* **Trend Indicators:** Simple Moving Averages (SMA 10, SMA 30).
+* **Volatility Metrics:** Bollinger Bands Width (gauging market expansion/contraction).
+* **Momentum & Statistical Lags:** Log-returns and lagged sequential returns to capture auto-correlation.
+* **Target Variable:** Shifted binary outcome (1 for Up, 0 for Down) predicting the next period's movement.
 
 ## Models & Performance
 
-The core predictive model is built using **XGBoost**, optimized for time-series forecasting. Performance is evaluated using a dual-metric approach: statistical robustness and simulated market profitability.
+The core predictive model is built using **XGBoost (Extreme Gradient Boosting)**, chosen for its efficiency with tabular data and ability to capture non-linear relationships without heavy feature scaling.
 
-### 1. Machine Learning Metrics
-Evaluated on an out-of-sample test set using Time-Series Cross-Validation to prevent data leakage and over-fitting.
+**Out-of-Sample Evaluation:**
+Because this is a time-series problem, the dataset is split sequentially (no random shuffling) to prevent future data leakage. 
+* The model is evaluated not just on raw accuracy, but on its ability to generate a profitable **Equity Curve** compared to a standard Buy & Hold strategy.
 
-* **Directional Accuracy:** 62.5%
-* **RMSE (Root Mean Squared Error):** 4.12
-* **MAE (Mean Absolute Error):** 3.05
-* **Cross-Validation (5-fold):** Consistent error distribution across all folds.
+## Results & Visualizations
 
-### 2. Trading Backtest Results
-Simulated trading performance based on model predictions, factoring in standard XAUUSD spread and slippage.
+*(Note: The strategy return assumes a simple 1:1 position sizing without transaction costs/slippage for baseline comparison).*
 
-* **Total Return:** +14.2% (Over 6-month test period)
-* **Max Drawdown:** -3.8% *(Maintained well below standard prop-firm limits)*
-* **Win Rate:** 58%
-* **Average Risk/Reward (R:R):** 1 : 2.5
-* **Profit Factor:** 1.6
-* **Sharpe Ratio:** 1.45
+### 1. Simulated Equity Curve
+The chart below illustrates the cumulative return of the XGBoost predictions vs. the underlying Gold asset.
+![Equity Curve](docs/images/equity_curve.png)
 
-## Technologies Used
-
-This project leverages the following tech stack for data processing, modeling, and evaluation:
-
-* **Language:** Python 3.8+
-* **Data Manipulation:** Pandas, NumPy
-* **Machine Learning:** Scikit-learn, XGBoost
-* **Technical Indicators:** TA-Lib / pandas-ta
-* **Visualization:** Matplotlib, Seaborn, Plotly
-
-## Feature Engineering
-
-Raw OHLCV (Open, High, Low, Close, Volume) data alone is often insufficient for robust machine learning models. This pipeline extracts several technical and statistical features to capture market microstructure, momentum, and volatility.
-
-Key features engineered in this project include:
-
-* **Trend Indicators:** Simple Moving Average (SMA) and Exponential Moving Average (EMA) crossovers.
-* **Momentum & Oscillators:** Relative Strength Index (RSI) and Moving Average Convergence Divergence (MACD).
-* **Volatility Metrics:** Average True Range (ATR) and Bollinger Bands width to gauge market expansion/contraction.
-* **Statistical Features:** Lagged log-returns, rolling mean, and rolling standard deviation over multiple timeframes (e.g., 5-period, 15-period, 50-period).
-* **Target Variable:** The model predicts the sign of the next period's return (1 for Up, 0 for Down) for binary classification, shifted by $N$ periods based on the trading horizon.
-
-## Results Visualization
-
-Visualizing the model's output is critical for evaluating its practical application. 
-
-*(Note: Replace the image links below with your actual generated plots from the `evaluate.py` script).*
-
-![Equity Curve]( docs/images/equity_curve.png)
-*> Figure 1: Simulated equity curve over the out-of-sample backtest period, showing cumulative returns.*
-
+### 2. Feature Importance
+This plot shows which technical features drove the model's decision-making process the most.
 ![Feature Importance](docs/images/feature_importance.png)
-*> Figure 2: Top 10 most influential technical features driving the XGBoost predictions (e.g., showing the dominance of ATR or specific MACD crossovers).*
 
-## Future Roadmap
+## How to Run (Local Setup)
 
-Continuous improvement is key in algorithmic trading. Planned updates for this repository include:
+Want to test or improve the model on your local machine? Follow these steps:
 
-- [ ] **Advanced Modeling:** Experiment with deep learning architectures (e.g., LSTMs or Transformers) to capture long-term sequential dependencies.
-- [ ] **Hyperparameter Optimization:** Integrate Optuna for automated, systematic hyperparameter tuning.
-- [ ] **Live Paper Trading:** Connect to the OANDA v20 REST API (or MetaTrader via ZeroMQ) for forward-testing predictions in real-time.
-- [ ] **Deployment:** Dockerize the entire pipeline for seamless execution on cloud environments (AWS/GCP).
+1. **Clone the repository:**
+   ```bash
+   git clone [https://github.com/dimssrmdn01/gold-price-forecast-ml.git](https://github.com/dimssrmdn01/gold-price-forecast-ml.git)
+   cd gold-price-forecast-ml
+   ```
 
-## Contributing
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-Contributions, issues, and feature requests are always welcome! Feel free to check the [issues page](https://github.com/yourusername/gold-price-forecast-ml/issues).
+3. **Execute the pipeline sequentially:**
+   ```bash
+   # 1. Download raw data
+   python Src/data_loader.py
+   
+   # 2. Engineer features
+   python Src/features.py
+   
+   # 3. Train the XGBoost model
+   python Src/train.py
+   
+   # 4. Generate backtest and visualizations
+   python Src/evaluate.py
+   ```
 
 ## Disclaimer
 
-**This project is strictly for educational and research purposes.** The machine learning models, backtest results, and any generated trading signals do not constitute financial advice. Trading financial markets—especially leveraged instruments like XAUUSD—carries a high level of risk and may not be suitable for all investors. Past performance is not indicative of future results. Always perform your own due diligence and consult with a certified financial advisor before risking real capital.
+**This project is strictly for educational, portfolio, and research purposes.** The machine learning models, backtest results, and any generated trading signals do not constitute financial advice. Trading financial markets—especially leveraged instruments like XAUUSD—carries a high level of risk and may not be suitable for all investors. Past performance is not indicative of future results.
 
 ## Contact
 
