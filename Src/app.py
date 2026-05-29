@@ -213,7 +213,7 @@ if os.path.exists('Models/sentiment_model.pkl'):
         
         #Tarik berita real time menggunakan yfinance
         with st.spinner("Mengakses satelit Yahoo Finance & membedah sintaksis berita..."):
-            ticker_data = yf.Ticker(ticker_symbol)
+            ticker_data = yf.Ticker(ticker)
             news_data = ticker_data.news
             
             if news_data:
