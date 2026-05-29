@@ -1,9 +1,11 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
 import numpy as np
+import yfinance as yf
 import matplotlib.pyplot as plt
 import seaborn as sns
+import joblib 
+import os
 from datetime import datetime, timedelta
 
 #Pengaturan layout terminal 
