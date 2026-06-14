@@ -10,7 +10,7 @@ An institutional-grade, real-time quantitative dashboard designed to analyze and
 ---
 
 ## 🚀 Live Terminal
-*([Insert your Streamlit Cloud URL here if deployed](https://dimas-xauusd-engine.streamlit.app/))*
+*(https://dimas-xauusd-engine.streamlit.app/)*
 
 ---
 
