@@ -368,8 +368,8 @@ if st.button("▰▰ INITIALIZE TENSOR COMPUTATION (LSTM) ▰▰", type="primary
             
             X_dl, y_dl = [], []
             for i in range(len(scaled_data) - seq_length):
-                X_dl.append(scaled_data[i:(i + sequence_length), 0])
-                y_dl.append(scaled_data[i + sequence_length, 0])
+                X_dl.append(scaled_data[i:(i + seq_length), 0])
+                y_dl.append(scaled_data[i + seq_length, 0])  # Perbaikan di sini
                 
             X_tensor = torch.FloatTensor(np.array(X_dl).reshape(-1, seq_length, 1))
             y_tensor = torch.FloatTensor(np.array(y_dl).reshape(-1, 1))
