@@ -203,7 +203,7 @@ st.divider()
 st.subheader("❖ Real-Time Fundamental Sentiment (NLP Engine)")
 if os.path.exists('Models/sentiment_model.pkl'):
     # ... (Bagian NLP dibiarkan sama karena sudah optimal)
-    st.info("Mesin NLP terdeteksi aktif. (Keluaran disembunyikan untuk fokus pada algoritma DL)")
+    st.info("Mesin NLP terdeteksi aktif. (Output disembunyikan untuk fokus pada algoritma DL)")
 else:
     st.info("Mesin NLP belum terpasang.")
 
@@ -254,7 +254,7 @@ with st.spinner("Mengekstrak data historis dan melatih model statistik..."):
 # -------------------------------------------------------------------
 st.divider()
 st.subheader(f"⚡ {ticker} Deep Learning Forecaster (PyTorch LSTM)")
-st.markdown("Arsitektur jaringan saraf tiruan (*Neural Network*) dengan memori LSTM untuk membedah volatilitas sekuensial pasar.")
+st.markdown("Model *time-series forecasting* berbasis Deep Learning untuk memprediksi arah tren harga.")
 
 if st.button("▰▰ INITIALIZE TENSOR COMPUTATION (LSTM) ▰▰", type="primary"):
     with st.spinner("Memproses Tensor dan melatih arsitektur LSTM selama 50 epoch..."):
