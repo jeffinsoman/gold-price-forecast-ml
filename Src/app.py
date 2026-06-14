@@ -398,7 +398,7 @@ if st.button("▰▰ INITIALIZE TENSOR COMPUTATION (LSTM) ▰▰", type="primary
             with dl1:
                 st.metric("Harga Aktual Terakhir", f"${lstm_actual:,.2f}")
             with dl2:
-                st.metric("Proyeksi Jaringan Saraf", f"${lstm_pred_usd:,.2f}", f"{lstm_pred_usd - lstm_actual:+.2f} USD")
+                st.metric("Proyeksi Harga (LSTM)", f"${lstm_pred_usd:,.2f}", f"{lstm_pred_usd - lstm_actual:+.2f} USD")
                 
         except Exception as e:
             st.error(f"Mesin PyTorch gagal dieksekusi: {e}")
