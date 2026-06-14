@@ -58,7 +58,7 @@ st.markdown("""
 # -------------------------------------------------------------------
 # HEADER SECTION
 # -------------------------------------------------------------------
-st.title("XAUUSD Institutional Quantitative & Predictive Analytics Engine")
+st.title(f"{ticker} Institutional Quantitative & Predictive Analytics Engine")
 st.markdown("### `SYSTEM STATUS: OPERATIONAL` | Risk Mitigation & Quantitative Execution Framework")
 st.markdown("---")
 
@@ -214,10 +214,10 @@ else:
 # MACHINE LEARNING ENGINE (LASSO)
 # -------------------------------------------------------------------
 st.divider()
-st.subheader("⟁ XAUUSD Predictive ML (Lasso Regression)")
+st.subheader(f"⟁ {ticker} Predictive ML (Lasso Regression)")
 with st.spinner("Mengekstrak data historis dan melatih model statistik..."):
     try:
-        hist = yf.Ticker('GC=F').history(period="2y")
+        hist = yf.Ticker(ticker).history(period="2y")
         if not hist.empty:
             df_ml = pd.DataFrame()
             df_ml['Close'] = hist['Close']
@@ -256,7 +256,7 @@ with st.spinner("Mengekstrak data historis dan melatih model statistik..."):
 # DEEP LEARNING ENGINE (PyTorch LSTM)
 # -------------------------------------------------------------------
 st.divider()
-st.subheader("⚡ XAUUSD Deep Learning Forecaster (PyTorch LSTM)")
+st.subheader(f"⚡ {ticker} Deep Learning Forecaster (PyTorch LSTM)")
 st.markdown("Arsitektur jaringan saraf tiruan (*Neural Network*) dengan memori LSTM untuk membedah volatilitas sekuensial pasar.")
 
 if st.button("▰▰ INITIALIZE TENSOR COMPUTATION (LSTM) ▰▰", type="primary"):
