@@ -19,6 +19,10 @@ def fetch_gold_data():
     print(f"Downloading historical data for {ticker} from {start} to {end}...")
     data = yf.download(ticker, start=start, end=end)
     
+    # Flatten multi-level columns from yfinance (e.g. "Price", "Close" stays "Close", not nested)
+    if isinstance(data.columns, pd.MultiIndex):
+        data.columns = data.columns.get_level_values(0)
+    
     if data.empty:
         raise ValueError("Failed to download data. Check internet connection or ticker symbol.")
     
