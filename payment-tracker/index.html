@@ -1,0 +1,1319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+</head>
+<body>
+<title>Payday Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600&display=swap">
+
+<style>
+/* ============================================================
+   Payday Ledger — tokens
+   Light is the base palette on bare :root. Dark is redefined in
+   two places so both the un-stamped system default and an explicit
+   data-theme choice resolve to a complete set.
+   ============================================================ */
+:root {
+  --page:        #E3E7E2;
+  --card:        #EEF0EE;
+  --card-2:      #E7EAE6;
+  --ink:         #0F1614;
+  --ink-2:       #3C4642;
+  --muted:       #5C665F;
+  --line:        #D0D6CF;
+  --line-strong: #B5BEB6;
+
+  --accent:      #00876B;
+  --accent-ink:  #FFFFFF;
+  --accent-soft: #CFE3DC;
+
+  /* categorical — validated: light surface #EEF0EE, all six checks pass */
+  --c-card:  #00876B;
+  --c-loan:  #3B5BDB;
+  --c-bill:  #B07200;
+  --c-rent:  #B03A8E;
+  --c-other: #6E7A73;
+  --c-rest:  #C3CAC3;
+
+  --danger:  #B3261E;
+  --warn:    #B07200;
+
+  --shadow: 0 1px 2px rgba(15,22,20,.06), 0 8px 24px -16px rgba(15,22,20,.28);
+
+  --font-display: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --font-body: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --r: 10px;
+  --maxw: 1180px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page:        #0E1113;
+    --card:        #15191B;
+    --card-2:      #1B2023;
+    --ink:         #E7EDE9;
+    --ink-2:       #C2CCC7;
+    --muted:       #8E9B94;
+    --line:        #232A2C;
+    --line-strong: #333C3F;
+
+    --accent:      #27A585;
+    --accent-ink:  #06110D;
+    --accent-soft: #17322B;
+
+    /* validated: dark surface #15191B */
+    --c-card:  #27A585;
+    --c-loan:  #7189E8;
+    --c-bill:  #C08829;
+    --c-rent:  #CC6EA8;
+    --c-other: #7C8A83;
+    --c-rest:  #2E3639;
+
+    --danger:  #E4796F;
+    --warn:    #C08829;
+
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -18px rgba(0,0,0,.9);
+  }
+}
+
+:root[data-theme="dark"] {
+  --page:        #0E1113;
+  --card:        #15191B;
+  --card-2:      #1B2023;
+  --ink:         #E7EDE9;
+  --ink-2:       #C2CCC7;
+  --muted:       #8E9B94;
+  --line:        #232A2C;
+  --line-strong: #333C3F;
+
+  --accent:      #27A585;
+  --accent-ink:  #06110D;
+  --accent-soft: #17322B;
+
+  --c-card:  #27A585;
+  --c-loan:  #7189E8;
+  --c-bill:  #C08829;
+  --c-rent:  #CC6EA8;
+  --c-other: #7C8A83;
+  --c-rest:  #2E3639;
+
+  --danger:  #E4796F;
+  --warn:    #C08829;
+
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -18px rgba(0,0,0,.9);
+}
+
+/* ---------- base ---------- */
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: -.015em; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+.wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 20px; }
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+
+/* ---------- top bar ---------- */
+.topbar {
+  position: sticky; top: 0; z-index: 40;
+  background: color-mix(in srgb, var(--page) 88%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line);
+}
+.topbar-in {
+  max-width: var(--maxw); margin: 0 auto; padding: 10px 20px;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+}
+.brand { display: flex; align-items: center; gap: 10px; margin-right: auto; }
+.mark {
+  width: 30px; height: 30px; border-radius: 8px; flex: none;
+  background: var(--accent); color: var(--accent-ink);
+  display: grid; place-items: center;
+  font-family: var(--font-mono); font-size: 13px; font-weight: 600;
+}
+.brand-name { font-family: var(--font-display); font-weight: 700; font-size: 16px; letter-spacing: -.02em; }
+
+.cyclenav { display: flex; align-items: center; gap: 2px; }
+.cyclenav .range {
+  font-family: var(--font-mono); font-size: 12.5px; font-weight: 500;
+  padding: 6px 10px; min-width: 168px; text-align: center;
+  color: var(--ink-2);
+}
+.iconbtn {
+  width: 34px; height: 34px; display: grid; place-items: center;
+  background: transparent; border: 1px solid var(--line); border-radius: 8px;
+  cursor: pointer; color: var(--ink-2);
+}
+.iconbtn:hover { border-color: var(--line-strong); background: var(--card); }
+.iconbtn svg { width: 15px; height: 15px; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 14px; min-height: 36px;
+  border-radius: 8px; border: 1px solid var(--line);
+  background: var(--card); color: var(--ink);
+  font-size: 13.5px; font-weight: 500; cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--line-strong); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn-primary:hover { filter: brightness(1.06); border-color: var(--accent); }
+.btn-quiet { background: transparent; }
+.btn-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); background: transparent; }
+
+/* ---------- hero ---------- */
+main { padding: 26px 0 90px; }
+.stack { display: flex; flex-direction: column; gap: 18px; }
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+}
+
+.hero { padding: 22px 22px 18px; }
+.hero-top { display: flex; align-items: flex-start; gap: 24px; flex-wrap: wrap; }
+.hero-salary { flex: 1 1 260px; min-width: 240px; }
+.salary-line { display: flex; align-items: baseline; gap: 10px; margin-top: 6px; }
+.salary-cur { font-family: var(--font-mono); font-size: 15px; font-weight: 500; color: var(--muted); }
+.salary-amt {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: clamp(30px, 6.4vw, 46px); font-weight: 600; line-height: 1;
+  letter-spacing: -.03em; background: none; border: 0; padding: 0;
+  width: 100%; max-width: 320px;
+}
+.salary-amt:hover { cursor: text; }
+.salary-sub { margin-top: 8px; color: var(--muted); font-size: 13px; }
+.salary-sub b { color: var(--ink-2); font-weight: 600; }
+
+.hero-verdict { flex: 0 1 300px; text-align: right; }
+.verdict-amt {
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  font-size: clamp(24px, 5vw, 34px); font-weight: 600; line-height: 1.05; letter-spacing: -.03em;
+  margin-top: 6px; display: block;
+}
+.verdict-amt.short { color: var(--danger); }
+.verdict-note { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+
+/* ---------- cycle rail ---------- */
+.rail-block { margin-top: 26px; }
+.rail {
+  position: relative; height: 58px; margin-top: 12px;
+}
+.rail-track {
+  position: absolute; left: 0; right: 0; top: 26px; height: 4px;
+  background: var(--card-2); border: 1px solid var(--line); border-radius: 3px;
+}
+.rail-elapsed {
+  position: absolute; top: 26px; height: 4px; left: 0;
+  background: var(--line-strong); border-radius: 3px;
+}
+.rail-today {
+  position: absolute; top: 6px; bottom: 14px; width: 2px;
+  background: var(--ink); border-radius: 2px;
+}
+.rail-today::after {
+  content: "TODAY";
+  position: absolute; top: -14px; left: 50%; transform: translateX(-50%);
+  font-family: var(--font-mono); font-size: 9px; letter-spacing: .1em;
+  color: var(--ink); white-space: nowrap;
+}
+.tick {
+  position: absolute; top: 22px; transform: translateX(-50%);
+  border-radius: 50%; border: 2px solid var(--card);
+  cursor: pointer; padding: 0;
+}
+.tick.paid { opacity: .38; }
+.tick.late { box-shadow: 0 0 0 2px var(--danger); }
+.rail-scale {
+  display: flex; justify-content: space-between;
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--muted);
+  border-top: 1px solid var(--line); padding-top: 7px;
+}
+
+/* ---------- stat row ---------- */
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border-radius: var(--r); overflow: hidden; border: 1px solid var(--line); }
+.stat { background: var(--card); padding: 15px 16px 16px; }
+.stat-val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 21px; font-weight: 600; letter-spacing: -.02em; margin-top: 7px; }
+.stat-foot { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+.stat.is-danger .stat-val { color: var(--danger); }
+
+/* ---------- allocation bar ---------- */
+.alloc { padding: 18px 22px 20px; }
+.allocbar { display: flex; height: 30px; margin-top: 14px; border-radius: 6px; overflow: hidden; background: var(--card-2); }
+.allocseg { position: relative; min-width: 0; border-right: 2px solid var(--card); }
+.allocseg:last-child { border-right: 0; }
+.alloclegend { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 14px; }
+.legitem { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.legitem .amt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink-2); font-weight: 500; }
+.legitem .nm { color: var(--muted); }
+
+/* ---------- layout split ---------- */
+.split { display: grid; grid-template-columns: minmax(0,1.62fr) minmax(0,1fr); gap: 18px; align-items: start; }
+
+/* ---------- payment list ---------- */
+.listhead { display: flex; align-items: center; gap: 12px; padding: 16px 20px 12px; }
+.listhead h2 { font-size: 15.5px; }
+.count-pill {
+  font-family: var(--font-mono); font-size: 11px; padding: 2px 7px; border-radius: 20px;
+  background: var(--card-2); border: 1px solid var(--line); color: var(--muted);
+}
+.group-label {
+  display: flex; align-items: center; gap: 9px;
+  padding: 13px 20px 7px; border-top: 1px solid var(--line);
+}
+.group-label .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex: none; }
+.group-label.overdue .dot { background: var(--danger); }
+.group-label.soon .dot { background: var(--warn); }
+.group-label.done .dot { background: var(--accent); }
+.group-sum { margin-left: auto; font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.row {
+  display: grid;
+  grid-template-columns: 34px minmax(0,1fr) auto 34px;
+  align-items: center; gap: 12px;
+  padding: 10px 20px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+}
+.row:first-of-type { border-top: 0; }
+.row:hover { background: var(--card-2); }
+.row.is-paid .row-name { color: var(--muted); }
+.row.is-paid .row-amt { color: var(--muted); }
+
+.check {
+  width: 26px; height: 26px; border-radius: 7px; cursor: pointer;
+  border: 1.5px solid var(--line-strong); background: transparent;
+  display: grid; place-items: center; color: transparent; padding: 0;
+}
+.check:hover { border-color: var(--accent); }
+.check[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.check svg { width: 13px; height: 13px; }
+
+.row-main { min-width: 0; cursor: pointer; }
+.row-name { font-weight: 500; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-meta { display: flex; align-items: center; gap: 8px; margin-top: 2px; flex-wrap: wrap; }
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; color: var(--muted);
+}
+.chip .swatch { width: 7px; height: 7px; border-radius: 2px; }
+.due {
+  font-family: var(--font-mono); font-size: 11px; color: var(--muted);
+}
+.due.late { color: var(--danger); font-weight: 500; }
+.due.soon { color: var(--warn); font-weight: 500; }
+
+.row-amt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 15px; font-weight: 500; text-align: right; white-space: nowrap; }
+
+.empty { padding: 34px 20px 38px; text-align: center; color: var(--muted); font-size: 13.5px; }
+
+/* ---------- side rail ---------- */
+.side { display: flex; flex-direction: column; gap: 18px; }
+.side-sec { padding: 16px 18px 18px; }
+.side-sec h2 { font-size: 14px; margin-bottom: 12px; }
+.cat-row { display: grid; grid-template-columns: 10px minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
+.cat-row:first-of-type { border-top: 0; }
+.cat-row .nm { font-size: 13px; }
+.cat-row .amt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 500; }
+.cat-bar { grid-column: 1 / -1; height: 3px; border-radius: 2px; background: var(--card-2); overflow: hidden; }
+.cat-bar i { display: block; height: 100%; border-radius: 2px; }
+
+.next-row { display: flex; align-items: baseline; gap: 10px; padding: 8px 0; border-top: 1px solid color-mix(in srgb, var(--line) 55%, transparent); }
+.next-row:first-of-type { border-top: 0; }
+.next-row .d { font-family: var(--font-mono); font-size: 11px; color: var(--muted); width: 52px; flex: none; }
+.next-row .n { font-size: 13px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.next-row .a { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 500; }
+
+/* ---------- tooltip ---------- */
+.tip {
+  position: fixed; z-index: 90; pointer-events: none;
+  background: var(--ink); color: var(--page);
+  padding: 7px 10px; border-radius: 7px; font-size: 12px; line-height: 1.35;
+  box-shadow: 0 8px 24px -10px rgba(0,0,0,.5);
+  max-width: 230px;
+}
+.tip .t-amt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* ---------- dialog ---------- */
+dialog {
+  border: 1px solid var(--line); border-radius: 14px; padding: 0;
+  background: var(--card); color: var(--ink);
+  width: min(460px, calc(100vw - 28px));
+  box-shadow: 0 30px 80px -30px rgba(0,0,0,.55);
+}
+dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
+.dlg-head { padding: 18px 20px 4px; }
+.dlg-head h2 { font-size: 18px; }
+.dlg-body { padding: 14px 20px 4px; display: flex; flex-direction: column; gap: 13px; }
+.dlg-foot { padding: 16px 20px 18px; display: flex; gap: 8px; align-items: center; }
+.dlg-foot .spacer { margin-left: auto; }
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .11em; text-transform: uppercase; color: var(--muted); }
+.field input, .field select, .field textarea {
+  background: var(--page); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 11px; min-height: 42px; width: 100%;
+}
+.field input[type="number"] { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.field textarea { min-height: 130px; font-family: var(--font-mono); font-size: 11.5px; resize: vertical; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+.hint { font-size: 11.5px; color: var(--muted); }
+
+/* ---------- mobile ---------- */
+.fab { display: none; }
+@media (max-width: 900px) {
+  .split { grid-template-columns: 1fr; }
+  .stats { grid-template-columns: 1fr 1fr; }
+  .hero-verdict { text-align: left; flex-basis: 100%; }
+}
+@media (max-width: 640px) {
+  .wrap { padding: 0 13px; }
+  .topbar-in { padding: 9px 13px; gap: 10px; }
+  .brand-name { display: none; }
+  .cyclenav { order: 3; width: 100%; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 8px; }
+  .cyclenav .range { min-width: 0; flex: 1; }
+  .hero { padding: 18px 16px 16px; }
+  .alloc, .side-sec { padding-left: 16px; padding-right: 16px; }
+  .row { padding: 11px 14px; grid-template-columns: 34px minmax(0,1fr) auto; gap: 10px; }
+  .row .rowedit { display: none; }
+  .listhead, .group-label { padding-left: 14px; padding-right: 14px; }
+  .stat { padding: 13px 14px 14px; }
+  .stat-val { font-size: 18px; }
+  .btn-add-desktop { display: none; }
+  .fab {
+    display: flex; position: fixed; z-index: 50;
+    right: 16px; bottom: calc(16px + env(safe-area-inset-bottom));
+    box-shadow: 0 10px 30px -10px rgba(0,0,0,.5);
+    padding: 13px 18px; border-radius: 26px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <div class="brand">
+      <div class="mark">28</div>
+      <div class="brand-name">Payday Ledger</div>
+    </div>
+
+    <div class="cyclenav">
+      <button class="iconbtn" id="prevCycle" aria-label="Previous cycle" title="Previous cycle">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg>
+      </button>
+      <div class="range num" id="cycleRange">—</div>
+      <button class="iconbtn" id="nextCycle" aria-label="Next cycle" title="Next cycle">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg>
+      </button>
+      <button class="iconbtn" id="todayBtn" aria-label="Jump to current cycle" title="Current cycle">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="5.2"/><path d="M8 5.4V8l1.9 1.2"/></svg>
+      </button>
+    </div>
+
+    <button class="btn btn-primary btn-add-desktop" id="addBtn">
+      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
+      Add payment
+    </button>
+    <button class="iconbtn" id="settingsBtn" aria-label="Settings" title="Settings">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2.1"/><path d="M8 1.6v1.6M8 12.8v1.6M14.4 8h-1.6M3.2 8H1.6M12.5 3.5l-1.1 1.1M4.6 11.4l-1.1 1.1M12.5 12.5l-1.1-1.1M4.6 4.6 3.5 3.5"/></svg>
+    </button>
+  </div>
+</div>
+
+<main>
+  <div class="wrap stack">
+
+    <section class="panel hero">
+      <div class="hero-top">
+        <div class="hero-salary">
+          <div class="eyebrow">Salary credited <span id="salaryDayLabel"></span></div>
+          <div class="salary-line">
+            <span class="salary-cur" id="curLabel">AED</span>
+            <input class="salary-amt num" id="salaryInput" type="text" inputmode="decimal" aria-label="Salary amount for this cycle">
+          </div>
+          <div class="salary-sub" id="salarySub"></div>
+        </div>
+        <div class="hero-verdict">
+          <div class="eyebrow">Left after every payment</div>
+          <span class="verdict-amt num" id="verdictAmt">—</span>
+          <div class="verdict-note" id="verdictNote"></div>
+        </div>
+      </div>
+
+      <div class="rail-block">
+        <div class="eyebrow">Payment calendar for this cycle</div>
+        <div class="rail" id="rail"></div>
+        <div class="rail-scale">
+          <span id="railStart"></span>
+          <span id="railMid"></span>
+          <span id="railEnd"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="stats" id="stats"></section>
+
+    <section class="panel alloc">
+      <div class="eyebrow">Where the salary goes</div>
+      <div class="allocbar" id="allocBar"></div>
+      <div class="alloclegend" id="allocLegend"></div>
+    </section>
+
+    <div class="split">
+      <section class="panel">
+        <div class="listhead">
+          <h2>Payments this cycle</h2>
+          <span class="count-pill num" id="listCount"></span>
+        </div>
+        <div id="list"></div>
+      </section>
+
+      <aside class="side">
+        <section class="panel side-sec">
+          <h2>By category</h2>
+          <div id="catBreakdown"></div>
+        </section>
+        <section class="panel side-sec">
+          <h2>Next 7 days</h2>
+          <div id="next7"></div>
+        </section>
+      </aside>
+    </div>
+  </div>
+</main>
+
+<button class="btn btn-primary fab" id="fabBtn">
+  <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
+  Add payment
+</button>
+
+<!-- ---------- payment dialog ---------- -->
+<dialog id="itemDlg">
+  <form method="dialog" id="itemForm">
+    <div class="dlg-head"><h2 id="itemDlgTitle">Add payment</h2></div>
+    <div class="dlg-body">
+      <div class="field">
+        <label for="f_name">Who gets paid</label>
+        <input id="f_name" name="name" required placeholder="e.g. ADCB Credit Card" autocomplete="off">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="f_amount">Amount</label>
+          <input id="f_amount" name="amount" type="number" step="0.01" min="0" placeholder="0.00">
+        </div>
+        <div class="field">
+          <label for="f_dueDay">Due day of month</label>
+          <input id="f_dueDay" name="dueDay" type="number" min="1" max="31" required>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="f_cat">Category</label>
+          <select id="f_cat" name="cat">
+            <option value="card">Credit Card</option>
+            <option value="loan">Loan</option>
+            <option value="bill">Bill</option>
+            <option value="rent">Rent</option>
+            <option value="other">Other</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="f_repeat">Repeats</label>
+          <select id="f_repeat" name="repeat">
+            <option value="monthly">Every month</option>
+            <option value="once">This cycle only</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label for="f_note">Note</label>
+        <input id="f_note" name="note" placeholder="Optional — card number, reference, min due" autocomplete="off">
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn btn-danger" id="deleteItem" hidden>Delete</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-quiet" data-close>Cancel</button>
+      <button type="submit" class="btn btn-primary" id="saveItem">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ---------- settings dialog ---------- -->
+<dialog id="settingsDlg">
+  <div class="dlg-head"><h2>Settings</h2></div>
+  <div class="dlg-body">
+    <div class="field-row">
+      <div class="field">
+        <label for="s_day">Salary credit day</label>
+        <input id="s_day" type="number" min="1" max="31">
+      </div>
+      <div class="field">
+        <label for="s_cur">Currency</label>
+        <input id="s_cur" maxlength="5">
+      </div>
+    </div>
+    <p class="hint">The cycle runs from your salary day to the day before the next one. A payment due before the salary day is counted in the following month, which is when you actually pay it.</p>
+    <div class="field">
+      <label for="s_theme">Appearance</label>
+      <select id="s_theme">
+        <option value="system">Match device</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="s_backup">Backup — copy this out, or paste one in and restore</label>
+      <textarea id="s_backup" spellcheck="false"></textarea>
+    </div>
+    <div class="dlg-foot" style="padding:0 0 4px">
+      <button type="button" class="btn" id="copyBackup">Copy</button>
+      <button type="button" class="btn" id="downloadBackup">Download</button>
+      <button type="button" class="btn" id="restoreBackup">Restore from box</button>
+    </div>
+    <p class="hint" id="syncNote"></p>
+  </div>
+  <div class="dlg-foot">
+    <span class="spacer"></span>
+    <button type="button" class="btn btn-primary" data-close>Done</button>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ==========================================================
+     Categories
+     ========================================================== */
+  var CATS = {
+    card:  { label: "Credit Card", v: "--c-card" },
+    loan:  { label: "Loan",        v: "--c-loan" },
+    bill:  { label: "Bill",        v: "--c-bill" },
+    rent:  { label: "Rent",        v: "--c-rent" },
+    other: { label: "Other",       v: "--c-other" }
+  };
+  var CAT_ORDER = ["card", "loan", "bill", "rent", "other"];
+  function catColor(c) { return "var(" + (CATS[c] || CATS.other).v + ")"; }
+  function catLabel(c) { return (CATS[c] || CATS.other).label; }
+
+  /* ==========================================================
+     State
+     ========================================================== */
+  var STORE_KEY = "payday-ledger-v1";
+  var state = null;
+  var viewKey = null;          // cycle currently on screen, e.g. "2026-08"
+  var db = null;               // artifact db namespace when available
+  var dbDoc = null;
+  var applyingRemote = false;
+  var saveTimer = null;
+
+  function uid() {
+    return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  function seedState() {
+    var seeds = [
+      ["CBD Credit Card",     "card", 15],
+      ["ADCB Credit Card",    "card", 5],
+      ["DIB Credit Card",     "card", 10],
+      ["Mashreq Credit Card", "card", 20],
+      ["Personal Loan",       "loan", 1],
+      ["Mobile Bill",         "bill", 8]
+    ];
+    return {
+      v: 1,
+      currency: "AED",
+      salaryDay: 28,
+      theme: "system",
+      items: seeds.map(function (s) {
+        return { id: uid(), name: s[0], cat: s[1], dueDay: s[2], amount: 0, note: "", repeat: "monthly", cycle: null };
+      }),
+      cycles: {},
+      updatedAt: Date.now()
+    };
+  }
+
+  function normalize(s) {
+    if (!s || typeof s !== "object" || !Array.isArray(s.items)) return null;
+    s.v = 1;
+    s.currency = s.currency || "AED";
+    s.salaryDay = clampInt(s.salaryDay, 1, 31, 28);
+    s.theme = s.theme === "light" || s.theme === "dark" ? s.theme : "system";
+    s.cycles = s.cycles && typeof s.cycles === "object" ? s.cycles : {};
+    s.updatedAt = Number(s.updatedAt) || 0;
+    s.items = s.items.map(function (i) {
+      return {
+        id: i.id || uid(),
+        name: String(i.name || "Untitled"),
+        cat: CATS[i.cat] ? i.cat : "other",
+        dueDay: clampInt(i.dueDay, 1, 31, 1),
+        amount: num(i.amount),
+        note: String(i.note || ""),
+        repeat: i.repeat === "once" ? "once" : "monthly",
+        cycle: i.cycle || null
+      };
+    });
+    return s;
+  }
+
+  function clampInt(v, lo, hi, dflt) {
+    v = parseInt(v, 10);
+    if (isNaN(v)) return dflt;
+    return Math.min(hi, Math.max(lo, v));
+  }
+  function num(v) {
+    v = parseFloat(v);
+    return isFinite(v) ? v : 0;
+  }
+
+  function loadLocal() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      return raw ? normalize(JSON.parse(raw)) : null;
+    } catch (e) { return null; }
+  }
+  function saveLocal() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  /* Called after any mutation. Writes through to local storage now and
+     to the shared store shortly after, so rapid edits make one write. */
+  function commit() {
+    if (applyingRemote) return;
+    state.updatedAt = Date.now();
+    saveLocal();
+    if (dbDoc) {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(function () {
+        dbDoc.set({ payload: JSON.stringify(state), updatedAt: state.updatedAt })
+          .catch(function () { /* keep the local copy; nothing to undo */ });
+      }, 700);
+    }
+    render();
+  }
+
+  /* ==========================================================
+     Cycle maths — the spine of the whole app
+     ========================================================== */
+  function daysInMonth(y, m) { return new Date(y, m + 1, 0).getDate(); }
+  function clampDay(day, y, m) { return Math.min(day, daysInMonth(y, m)); }
+  function keyOf(y, m) { return y + "-" + String(m + 1).padStart(2, "0"); }
+  function parseKey(k) {
+    var p = k.split("-");
+    return { y: +p[0], m: +p[1] - 1 };
+  }
+  function startOfDay(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+  function today() { return startOfDay(new Date()); }
+
+  /* The cycle a date belongs to: it starts on the salary day. */
+  function cycleKeyFor(date, salaryDay) {
+    var y = date.getFullYear(), m = date.getMonth();
+    if (date.getDate() < clampDay(salaryDay, y, m)) {
+      m -= 1;
+      if (m < 0) { m = 11; y -= 1; }
+    }
+    return keyOf(y, m);
+  }
+  function cycleStart(key) {
+    var p = parseKey(key);
+    return new Date(p.y, p.m, clampDay(state.salaryDay, p.y, p.m));
+  }
+  function cycleEnd(key) {           // last day of the cycle, inclusive
+    var next = shiftKey(key, 1);
+    var d = cycleStart(next);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
+  }
+  function shiftKey(key, by) {
+    var p = parseKey(key);
+    var d = new Date(p.y, p.m + by, 1);
+    return keyOf(d.getFullYear(), d.getMonth());
+  }
+
+  /* When an item due on `dueDay` actually falls inside a given cycle.
+     A due day at or after the salary day is paid in the cycle's opening
+     month; an earlier one is paid the month after, which is when it
+     actually comes round. Short months can push a clamped date past
+     either end of the window (salary day 31, due day 30, February), so
+     the result is pinned inside the cycle — otherwise the payment would
+     show up in two cycles at once, or in none. */
+  function dueDateIn(key, dueDay) {
+    var p = parseKey(key);
+    var y = p.y, m = p.m;
+    if (dueDay < clampDay(state.salaryDay, y, m)) {
+      var n = new Date(y, m + 1, 1);
+      y = n.getFullYear(); m = n.getMonth();
+    }
+    var d = new Date(y, m, clampDay(dueDay, y, m));
+    var lo = cycleStart(key), hi = cycleEnd(key);
+    if (d < lo) return lo;
+    if (d > hi) return hi;
+    return d;
+  }
+
+  function cycleData(key) {
+    if (!state.cycles[key]) state.cycles[key] = { salary: null, pay: {} };
+    if (!state.cycles[key].pay) state.cycles[key].pay = {};
+    return state.cycles[key];
+  }
+  function salaryFor(key) {
+    var c = state.cycles[key];
+    if (c && c.salary !== null && c.salary !== undefined) return num(c.salary);
+    // fall back to the most recent earlier cycle that has a figure
+    var keys = Object.keys(state.cycles).filter(function (k) {
+      return k < key && state.cycles[k] && state.cycles[k].salary != null;
+    }).sort();
+    if (keys.length) return num(state.cycles[keys[keys.length - 1]].salary);
+    return 0;
+  }
+
+  /* Every payment owed in a cycle, resolved with its status. */
+  function paymentsFor(key) {
+    var c = cycleData(key);
+    var t = today();
+    return state.items
+      .filter(function (i) { return i.repeat === "monthly" || i.cycle === key; })
+      .map(function (i) {
+        var rec = c.pay[i.id] || {};
+        var due = dueDateIn(key, i.dueDay);
+        var amount = rec.amount != null ? num(rec.amount) : num(i.amount);
+        var paid = !!rec.paid;
+        var days = Math.round((due - t) / 86400000);
+        return {
+          item: i, id: i.id, name: i.name, cat: i.cat, note: i.note,
+          due: due, amount: amount, paid: paid, paidOn: rec.paidOn || null,
+          days: days,
+          status: paid ? "paid" : days < 0 ? "overdue" : days <= 7 ? "soon" : "upcoming"
+        };
+      })
+      .sort(function (a, b) { return a.due - b.due || a.name.localeCompare(b.name); });
+  }
+
+  function totals(key) {
+    var rows = paymentsFor(key);
+    var out = { committed: 0, paid: 0, unpaid: 0, overdue: 0, byCat: {}, rows: rows };
+    rows.forEach(function (r) {
+      out.committed += r.amount;
+      if (r.paid) out.paid += r.amount; else out.unpaid += r.amount;
+      if (r.status === "overdue") out.overdue += r.amount;
+      out.byCat[r.cat] = (out.byCat[r.cat] || 0) + r.amount;
+    });
+    out.salary = salaryFor(key);
+    out.left = out.salary - out.committed;
+    return out;
+  }
+
+  /* ==========================================================
+     Formatting
+     ========================================================== */
+  var nf2 = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  var nf0 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+  function money(n) { return nf2.format(n); }
+  function moneyShort(n) {
+    var a = Math.abs(n);
+    return a >= 1000 && a % 1 === 0 ? nf0.format(n) : nf2.format(n);
+  }
+  var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function fmtDay(d) { return d.getDate() + " " + MON[d.getMonth()]; }
+  function fmtDayYear(d) { return d.getDate() + " " + MON[d.getMonth()] + " " + d.getFullYear(); }
+  function ordinal(n) {
+    var s = ["th", "st", "nd", "rd"], v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+  function relDays(n) {
+    if (n === 0) return "today";
+    if (n === 1) return "tomorrow";
+    if (n === -1) return "1 day late";
+    if (n < 0) return Math.abs(n) + " days late";
+    return "in " + n + " days";
+  }
+
+  /* ==========================================================
+     Render
+     ========================================================== */
+  var el = {};
+  ["cycleRange", "salaryDayLabel", "salaryInput", "salarySub", "curLabel", "verdictAmt", "verdictNote",
+   "rail", "railStart", "railMid", "railEnd", "stats", "allocBar", "allocLegend",
+   "list", "listCount", "catBreakdown", "next7"].forEach(function (id) { el[id] = document.getElementById(id); });
+
+  function render() {
+    applyTheme();
+    var key = viewKey;
+    var t = totals(key);
+    var start = cycleStart(key), end = cycleEnd(key);
+    var now = today();
+    var isCurrent = cycleKeyFor(now, state.salaryDay) === key;
+
+    el.cycleRange.textContent = fmtDay(start) + " – " + fmtDayYear(end);
+    el.salaryDayLabel.textContent = "on the " + ordinal(state.salaryDay);
+    el.curLabel.textContent = state.currency;
+    if (document.activeElement !== el.salaryInput) el.salaryInput.value = money(t.salary);
+
+    var totalDays = Math.round((end - start) / 86400000) + 1;
+    var elapsed = Math.round((now - start) / 86400000);
+    var leftDays = totalDays - elapsed;
+    el.salarySub.innerHTML = isCurrent
+      ? "Day <b>" + (elapsed + 1) + "</b> of " + totalDays + " — <b>" + leftDays + "</b> days until the next salary"
+      : (now > end ? "Closed cycle — " + totalDays + " days" : "Upcoming cycle — starts in <b>" + Math.round((start - now) / 86400000) + "</b> days");
+
+    // verdict
+    el.verdictAmt.textContent = (t.left < 0 ? "−" : "") + state.currency + " " + money(Math.abs(t.left));
+    el.verdictAmt.classList.toggle("short", t.left < 0);
+    if (t.salary === 0) {
+      el.verdictNote.textContent = "Type your salary above to see what is left.";
+    } else if (t.left < 0) {
+      el.verdictNote.textContent = "Payments exceed the salary by " + money(Math.abs(t.left)) + ".";
+    } else if (isCurrent && leftDays > 0) {
+      el.verdictNote.textContent = money(t.left / leftDays) + " a day for the " + leftDays + " days left.";
+    } else {
+      el.verdictNote.textContent = "After " + t.rows.length + " payment" + (t.rows.length === 1 ? "" : "s") + " totalling " + money(t.committed) + ".";
+    }
+
+    renderRail(key, start, end, t, isCurrent, now);
+    renderStats(t, isCurrent);
+    renderAlloc(t);
+    renderList(t);
+    renderCats(t);
+    renderNext7(t, isCurrent, now);
+  }
+
+  function renderRail(key, start, end, t, isCurrent, now) {
+    var span = (end - start) || 1;
+    var html = '<div class="rail-track"></div>';
+    var pctToday = null;
+    if (isCurrent) {
+      pctToday = Math.max(0, Math.min(100, ((now - start) / span) * 100));
+      html += '<div class="rail-elapsed" style="width:' + pctToday + '%"></div>';
+    } else if (now > end) {
+      html += '<div class="rail-elapsed" style="width:100%"></div>';
+    }
+
+    var max = t.rows.reduce(function (m, r) { return Math.max(m, r.amount); }, 0) || 1;
+    t.rows.forEach(function (r) {
+      var pct = Math.max(0, Math.min(100, ((r.due - start) / span) * 100));
+      var size = 9 + Math.round(Math.sqrt(r.amount / max) * 9); // 9–18px, area-ish scaling
+      html += '<button class="tick ' + (r.paid ? "paid" : r.status === "overdue" ? "late" : "") + '"' +
+        ' style="left:' + pct + '%;width:' + size + 'px;height:' + size + 'px;margin-top:' + ((18 - size) / 2) + 'px;background:' + catColor(r.cat) + '"' +
+        ' data-tip="' + esc(r.name) + " · " + esc(fmtDay(r.due)) + '" data-tip2="' + esc(state.currency + " " + money(r.amount) + (r.paid ? " · paid" : "")) + '"' +
+        ' data-edit="' + r.id + '" aria-label="' + esc(r.name + ", " + money(r.amount) + ", due " + fmtDay(r.due)) + '"></button>';
+    });
+
+    if (pctToday !== null) html += '<div class="rail-today" style="left:' + pctToday + '%"></div>';
+    el.rail.innerHTML = html;
+
+    el.railStart.textContent = fmtDay(start) + " · salary";
+    var mid = new Date(start.getTime() + span / 2);
+    el.railMid.textContent = fmtDay(mid);
+    el.railEnd.textContent = fmtDay(end);
+  }
+
+  function renderStats(t, isCurrent) {
+    var cards = [
+      { k: "Total going out", v: t.committed, f: t.rows.length + " payment" + (t.rows.length === 1 ? "" : "s") },
+      { k: "Paid so far", v: t.paid, f: t.committed ? Math.round((t.paid / t.committed) * 100) + "% of the total" : "no amounts set yet" },
+      { k: "Still to pay", v: t.unpaid, f: t.rows.filter(function (r) { return !r.paid; }).length + " outstanding" },
+      { k: "Overdue", v: t.overdue, f: t.overdue > 0 ? "past the due date" : "nothing late", danger: t.overdue > 0 }
+    ];
+    el.stats.innerHTML = cards.map(function (c) {
+      return '<div class="stat' + (c.danger ? " is-danger" : "") + '">' +
+        '<div class="eyebrow">' + c.k + '</div>' +
+        '<div class="stat-val">' + moneyShort(c.v) + '</div>' +
+        '<div class="stat-foot">' + c.f + '</div></div>';
+    }).join("");
+  }
+
+  function renderAlloc(t) {
+    var base = Math.max(t.salary, t.committed) || 1;
+    var segs = [];
+    CAT_ORDER.forEach(function (c) {
+      if (t.byCat[c] > 0) segs.push({ label: catLabel(c), amt: t.byCat[c], color: catColor(c) });
+    });
+    var rest = t.salary - t.committed;
+    if (rest > 0) segs.push({ label: "Left over", amt: rest, color: "var(--c-rest)", rest: true });
+
+    el.allocBar.innerHTML = segs.map(function (s) {
+      return '<div class="allocseg" style="flex:' + (s.amt / base) + ' 1 0;background:' + s.color + '"' +
+        ' data-tip="' + esc(s.label) + '" data-tip2="' + esc(state.currency + " " + money(s.amt) + " · " + Math.round((s.amt / base) * 100) + "%") + '"></div>';
+    }).join("") || '<div class="allocseg" style="flex:1;background:var(--c-rest)"></div>';
+
+    el.allocLegend.innerHTML = segs.map(function (s) {
+      return '<span class="legitem"><span class="swatch" style="background:' + s.color + '"></span>' +
+        '<span class="nm">' + esc(s.label) + '</span><span class="amt">' + moneyShort(s.amt) + '</span></span>';
+    }).join("") || '<span class="legitem"><span class="nm">' +
+      (t.rows.length ? "Add an amount to each payment to see the split." : "Add your first payment to see the split.") +
+      '</span></span>';
+  }
+
+  var GROUPS = [
+    { k: "overdue", label: "Overdue", cls: "overdue" },
+    { k: "soon", label: "Due within 7 days", cls: "soon" },
+    { k: "upcoming", label: "Later this cycle", cls: "" },
+    { k: "paid", label: "Paid", cls: "done" }
+  ];
+
+  function renderList(t) {
+    el.listCount.textContent = t.rows.filter(function (r) { return !r.paid; }).length + " left";
+    if (!t.rows.length) {
+      el.list.innerHTML = '<div class="empty">No payments in this cycle yet.<br>Add the first one to start tracking.</div>';
+      return;
+    }
+    var html = "";
+    GROUPS.forEach(function (g) {
+      var rows = t.rows.filter(function (r) { return r.status === g.k; });
+      if (!rows.length) return;
+      var sum = rows.reduce(function (a, r) { return a + r.amount; }, 0);
+      html += '<div class="group-label ' + g.cls + '"><span class="dot"></span><span class="eyebrow">' + g.label + '</span>' +
+        '<span class="group-sum">' + moneyShort(sum) + '</span></div>';
+      rows.forEach(function (r) { html += rowHtml(r); });
+    });
+    el.list.innerHTML = html;
+  }
+
+  function rowHtml(r) {
+    var dueCls = r.paid ? "" : r.status === "overdue" ? " late" : r.status === "soon" ? " soon" : "";
+    var dueTxt = r.paid
+      ? "paid " + (r.paidOn ? fmtDay(new Date(r.paidOn)) : "")
+      : fmtDay(r.due) + " · " + relDays(r.days);
+    return '<div class="row' + (r.paid ? " is-paid" : "") + '">' +
+      '<button class="check" data-toggle="' + r.id + '" aria-pressed="' + r.paid + '" aria-label="' + esc((r.paid ? "Mark unpaid: " : "Mark paid: ") + r.name) + '">' +
+        '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m3.5 8.4 3 3 6-7"/></svg>' +
+      '</button>' +
+      '<div class="row-main" data-edit="' + r.id + '" role="button" tabindex="0">' +
+        '<div class="row-name">' + esc(r.name) + '</div>' +
+        '<div class="row-meta">' +
+          '<span class="chip"><span class="swatch" style="background:' + catColor(r.cat) + '"></span>' + catLabel(r.cat) + '</span>' +
+          '<span class="due' + dueCls + '">' + esc(dueTxt) + '</span>' +
+          (r.note ? '<span class="chip">' + esc(r.note) + '</span>' : "") +
+        '</div>' +
+      '</div>' +
+      '<button class="row-amt" data-amount="' + r.id + '" style="background:none;border:0;cursor:text" title="Click to change the amount for this cycle">' + money(r.amount) + '</button>' +
+      '<button class="iconbtn rowedit" data-edit="' + r.id + '" aria-label="' + esc("Edit " + r.name) + '">' +
+        '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.2 2.6 13.4 4.8 5.6 12.6l-3 .8.8-3z"/></svg>' +
+      '</button>' +
+    '</div>';
+  }
+
+  function renderCats(t) {
+    var max = Math.max.apply(null, CAT_ORDER.map(function (c) { return t.byCat[c] || 0; }).concat([1]));
+    var rows = CAT_ORDER.filter(function (c) { return t.byCat[c] > 0; });
+    if (!rows.length) {
+      el.catBreakdown.innerHTML = '<p class="hint">' +
+        (t.rows.length ? "None of this cycle's payments have an amount yet." : "Nothing scheduled in this cycle.") + '</p>';
+      return;
+    }
+    el.catBreakdown.innerHTML = rows.map(function (c) {
+      var v = t.byCat[c];
+      return '<div class="cat-row">' +
+        '<span class="swatch" style="background:' + catColor(c) + '"></span>' +
+        '<span class="nm">' + catLabel(c) + '</span>' +
+        '<span class="amt">' + moneyShort(v) + '</span>' +
+        '<span class="cat-bar"><i style="width:' + ((v / max) * 100) + '%;background:' + catColor(c) + '"></i></span>' +
+      '</div>';
+    }).join("");
+  }
+
+  function renderNext7(t, isCurrent, now) {
+    var rows = t.rows.filter(function (r) { return !r.paid && r.days <= 7; });
+    if (!isCurrent) rows = t.rows.filter(function (r) { return !r.paid; }).slice(0, 6);
+    if (!rows.length) {
+      el.next7.innerHTML = '<p class="hint">Nothing due in the next week. ' + (t.unpaid > 0 ? moneyShort(t.unpaid) + " still to pay later this cycle." : "This cycle is fully paid.") + '</p>';
+      return;
+    }
+    el.next7.innerHTML = rows.map(function (r) {
+      return '<div class="next-row">' +
+        '<span class="d' + (r.days < 0 ? '" style="color:var(--danger)' : "") + '">' + fmtDay(r.due) + '</span>' +
+        '<span class="n">' + esc(r.name) + '</span>' +
+        '<span class="a">' + moneyShort(r.amount) + '</span>' +
+      '</div>';
+    }).join("");
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  /* ==========================================================
+     Theme
+     ========================================================== */
+  function applyTheme() {
+    if (state.theme === "system") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", state.theme);
+  }
+
+  /* ==========================================================
+     Interaction
+     ========================================================== */
+  document.getElementById("prevCycle").onclick = function () { viewKey = shiftKey(viewKey, -1); render(); };
+  document.getElementById("nextCycle").onclick = function () { viewKey = shiftKey(viewKey, 1); render(); };
+  document.getElementById("todayBtn").onclick = function () { viewKey = cycleKeyFor(today(), state.salaryDay); render(); };
+
+  el.salaryInput.addEventListener("focus", function () {
+    var v = salaryFor(viewKey);
+    this.value = v ? String(v) : "";
+    this.select();
+  });
+  el.salaryInput.addEventListener("blur", function () {
+    cycleData(viewKey).salary = num(this.value.replace(/[^0-9.\-]/g, ""));
+    commit();
+  });
+  el.salaryInput.addEventListener("keydown", function (e) { if (e.key === "Enter") this.blur(); });
+
+  document.body.addEventListener("click", function (e) {
+    var tog = e.target.closest("[data-toggle]");
+    if (tog) { togglePaid(tog.getAttribute("data-toggle")); return; }
+
+    var amt = e.target.closest("[data-amount]");
+    if (amt) { editAmount(amt.getAttribute("data-amount")); return; }
+
+    var ed = e.target.closest("[data-edit]");
+    if (ed) { openItem(ed.getAttribute("data-edit")); return; }
+
+    var close = e.target.closest("[data-close]");
+    if (close) { var d = close.closest("dialog"); if (d) d.close(); return; }
+  });
+
+  document.body.addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    var t = e.target.closest && e.target.closest(".row-main[data-edit]");
+    if (!t) return;
+    e.preventDefault();
+    openItem(t.getAttribute("data-edit"));
+  });
+
+  function togglePaid(id) {
+    var c = cycleData(viewKey);
+    var rec = c.pay[id] || (c.pay[id] = {});
+    rec.paid = !rec.paid;
+    rec.paidOn = rec.paid ? new Date().toISOString().slice(0, 10) : null;
+    commit();
+  }
+
+  function editAmount(id) {
+    var rows = paymentsFor(viewKey);
+    var r = rows.filter(function (x) { return x.id === id; })[0];
+    if (!r) return;
+    var v = prompt("Amount for " + r.name + " in this cycle (" + state.currency + "):", String(r.amount));
+    if (v === null) return;
+    var c = cycleData(viewKey);
+    var rec = c.pay[id] || (c.pay[id] = {});
+    rec.amount = num(v);
+    commit();
+  }
+
+  /* ---------- payment dialog ---------- */
+  var itemDlg = document.getElementById("itemDlg");
+  var itemForm = document.getElementById("itemForm");
+  var deleteBtn = document.getElementById("deleteItem");
+  var editingId = null;
+
+  function openItem(id) {
+    editingId = id || null;
+    var i = id ? state.items.filter(function (x) { return x.id === id; })[0] : null;
+    document.getElementById("itemDlgTitle").textContent = i ? "Edit payment" : "Add payment";
+    itemForm.name.value = i ? i.name : "";
+    itemForm.amount.value = i ? (i.amount || "") : "";
+    itemForm.dueDay.value = i ? i.dueDay : Math.min(state.salaryDay + 2, 28);
+    itemForm.cat.value = i ? i.cat : "card";
+    itemForm.repeat.value = i ? i.repeat : "monthly";
+    itemForm.note.value = i ? i.note : "";
+    deleteBtn.hidden = !i;
+    itemDlg.showModal();
+    setTimeout(function () { itemForm.name.focus(); }, 30);
+  }
+
+  itemForm.addEventListener("submit", function () {
+    var data = {
+      name: itemForm.name.value.trim() || "Untitled",
+      amount: num(itemForm.amount.value),
+      dueDay: clampInt(itemForm.dueDay.value, 1, 31, 1),
+      cat: itemForm.cat.value,
+      repeat: itemForm.repeat.value,
+      note: itemForm.note.value.trim()
+    };
+    if (editingId) {
+      state.items = state.items.map(function (i) { return i.id === editingId ? Object.assign({}, i, data) : i; });
+    } else {
+      data.id = uid();
+      data.cycle = data.repeat === "once" ? viewKey : null;
+      state.items.push(data);
+    }
+    editingId = null;
+    commit();
+  });
+
+  deleteBtn.onclick = function () {
+    if (!editingId) return;
+    if (!confirm("Delete this payment from every cycle?")) return;
+    state.items = state.items.filter(function (i) { return i.id !== editingId; });
+    Object.keys(state.cycles).forEach(function (k) {
+      if (state.cycles[k].pay) delete state.cycles[k].pay[editingId];
+    });
+    editingId = null;
+    itemDlg.close();
+    commit();
+  };
+
+  document.getElementById("addBtn").onclick = function () { openItem(null); };
+  document.getElementById("fabBtn").onclick = function () { openItem(null); };
+
+  /* ---------- settings ---------- */
+  var setDlg = document.getElementById("settingsDlg");
+  var sDay = document.getElementById("s_day"),
+      sCur = document.getElementById("s_cur"),
+      sTheme = document.getElementById("s_theme"),
+      sBackup = document.getElementById("s_backup");
+
+  document.getElementById("settingsBtn").onclick = function () {
+    sDay.value = state.salaryDay;
+    sCur.value = state.currency;
+    sTheme.value = state.theme;
+    sBackup.value = JSON.stringify(state, null, 2);
+    document.getElementById("syncNote").textContent = dbDoc
+      ? "Synced to this page — the same figures load on your phone and your laptop."
+      : "Saved in this browser only. Copy the backup out to move it elsewhere.";
+    setDlg.showModal();
+  };
+  sDay.onchange = function () { state.salaryDay = clampInt(this.value, 1, 31, 28); viewKey = cycleKeyFor(today(), state.salaryDay); commit(); };
+  sCur.onchange = function () { state.currency = this.value.trim().toUpperCase() || "AED"; commit(); };
+  sTheme.onchange = function () { state.theme = this.value; commit(); };
+
+  document.getElementById("copyBackup").onclick = function () {
+    sBackup.select();
+    var btn = this;
+    var done = function () { btn.textContent = "Copied"; setTimeout(function () { btn.textContent = "Copy"; }, 1600); };
+    if (navigator.clipboard) navigator.clipboard.writeText(sBackup.value).then(done, function () { document.execCommand("copy"); done(); });
+    else { document.execCommand("copy"); done(); }
+  };
+
+  document.getElementById("downloadBackup").onclick = function () {
+    var name = "payday-ledger-" + new Date().toISOString().slice(0, 10) + ".json";
+    var btn = this;
+    if (window.claude && typeof window.claude.use === "function") {
+      window.claude.use("downloads").then(function (dl) {
+        if (!dl) return anchorDownload(name, sBackup.value, btn);
+        dl.save({ filename: name, data: sBackup.value }).catch(function () {});
+      }, function () { anchorDownload(name, sBackup.value, btn); });
+    } else {
+      anchorDownload(name, sBackup.value, btn);
+    }
+  };
+  function anchorDownload(name, text, btn) {
+    try {
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+      a.download = name;
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+    } catch (e) {
+      btn.textContent = "Use Copy instead";
+      setTimeout(function () { btn.textContent = "Download"; }, 2200);
+    }
+  }
+
+  document.getElementById("restoreBackup").onclick = function () {
+    var parsed;
+    try { parsed = normalize(JSON.parse(sBackup.value)); } catch (e) { parsed = null; }
+    if (!parsed) { alert("That is not a Payday Ledger backup. Paste the whole JSON block, braces included."); return; }
+    if (!confirm("Replace everything on this page with the pasted backup?")) return;
+    state = parsed;
+    viewKey = cycleKeyFor(today(), state.salaryDay);
+    setDlg.close();
+    commit();
+  };
+
+  /* ---------- tooltip ---------- */
+  var tip = document.createElement("div");
+  tip.className = "tip";
+  tip.hidden = true;
+  document.body.appendChild(tip);
+
+  function showTip(target) {
+    var a = target.getAttribute("data-tip"), b = target.getAttribute("data-tip2");
+    tip.innerHTML = "<div>" + a + "</div>" + (b ? '<div class="t-amt">' + b + "</div>" : "");
+    tip.hidden = false;
+    var r = target.getBoundingClientRect(), tr = tip.getBoundingClientRect();
+    var left = Math.min(window.innerWidth - tr.width - 8, Math.max(8, r.left + r.width / 2 - tr.width / 2));
+    var top = r.top - tr.height - 9;
+    if (top < 8) top = r.bottom + 9;
+    tip.style.left = left + "px";
+    tip.style.top = top + "px";
+  }
+  ["mouseover", "focusin"].forEach(function (ev) {
+    document.body.addEventListener(ev, function (e) {
+      var t = e.target.closest && e.target.closest("[data-tip]");
+      if (t) showTip(t);
+    });
+  });
+  ["mouseout", "focusout", "scroll"].forEach(function (ev) {
+    document.body.addEventListener(ev, function () { tip.hidden = true; }, true);
+  });
+
+  /* ==========================================================
+     Boot — local first, then adopt the shared copy if newer
+     ========================================================== */
+  var stored = loadLocal();
+  state = stored || seedState();
+  if (!stored) saveLocal();   // pin the seeded ids straight away
+  viewKey = cycleKeyFor(today(), state.salaryDay);
+  render();
+
+  if (window.claude && typeof window.claude.use === "function") {
+    window.claude.use("db").then(function (ns) {
+      if (!ns) return;
+      db = ns;
+      dbDoc = db.doc("state/tracker");
+      dbDoc.onSnapshot(function (snap) {
+        if (!snap.exists) {
+          // first run on this artifact — seed the shared copy from what is here
+          dbDoc.set({ payload: JSON.stringify(state), updatedAt: state.updatedAt }).catch(function () {});
+          return;
+        }
+        var d = snap.data() || {};
+        var remoteAt = Number(d.updatedAt) || 0;
+        if (remoteAt <= state.updatedAt) return;
+        var parsed;
+        try { parsed = normalize(JSON.parse(d.payload)); } catch (e) { parsed = null; }
+        if (!parsed) return;
+        applyingRemote = true;
+        state = parsed;
+        saveLocal();
+        applyingRemote = false;
+        render();
+      }, function () { /* subscription ended; local storage keeps working */ });
+    }, function () {});
+  }
+})();
+</script>
+</body>
+</html>
