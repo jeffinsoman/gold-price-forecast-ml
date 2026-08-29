@@ -160,9 +160,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .cyclenav { display: flex; align-items: center; gap: 2px; }
 .cyclenav .range {
-  font-family: var(--font-mono); font-size: 12.5px; font-weight: 500;
-  padding: 6px 10px; min-width: 168px; text-align: center;
-  color: var(--ink-2);
+  padding: 3px 10px; min-width: 168px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+}
+.range-month {
+  font-family: var(--font-display); font-size: 14.5px; font-weight: 600;
+  letter-spacing: -.015em; color: var(--ink); line-height: 1.2;
+}
+.range-dates {
+  font-size: 10px; color: var(--muted); letter-spacing: .02em; line-height: 1.2;
 }
 .iconbtn {
   width: 34px; height: 34px; display: grid; place-items: center;
@@ -274,6 +280,39 @@ main { padding: 26px 0 90px; }
 .swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
 .legitem .amt { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink-2); font-weight: 500; }
 .legitem .nm { color: var(--muted); }
+
+/* ---------- balances & credit ---------- */
+.balances { padding: 16px 22px 20px; }
+.bal-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.bal-head h2 { font-size: 15.5px; margin-right: auto; }
+
+.minitiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.minitile { background: var(--card); padding: 12px 14px 13px; }
+.minitile .v { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 600; letter-spacing: -.02em; margin-top: 6px; }
+.minitile .f { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+.minitile.warn .v { color: var(--warn); }
+.minitile.danger .v { color: var(--danger); }
+
+.bal-cols { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.25fr); gap: 26px; margin-top: 20px; }
+.bal-col > .eyebrow { padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+
+.acct {
+  display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: baseline;
+  gap: 4px 12px; padding: 10px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 55%, transparent);
+  cursor: pointer; width: 100%; text-align: left; background: none; border-left: 0; border-right: 0; border-top: 0;
+}
+.acct:hover { background: var(--card-2); }
+.acct .nm { font-size: 13.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct .bal { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 500; }
+.acct .sub { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); }
+.acct .sub .pct { font-weight: 500; }
+.acct .sub .pct.warn { color: var(--warn); }
+.acct .sub .pct.danger { color: var(--danger); }
+.usage { flex: 1; height: 4px; border-radius: 3px; background: var(--card-2); overflow: hidden; min-width: 40px; }
+.usage i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+.usage i.warn { background: var(--warn); }
+.usage i.danger { background: var(--danger); }
 
 /* ---------- layout split ---------- */
 .split { display: grid; grid-template-columns: minmax(0,1.62fr) minmax(0,1fr); gap: 18px; align-items: start; }
@@ -391,6 +430,8 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
 @media (max-width: 900px) {
   .split { grid-template-columns: 1fr; }
   .stats { grid-template-columns: 1fr 1fr; }
+  .minitiles { grid-template-columns: 1fr 1fr; }
+  .bal-cols { grid-template-columns: 1fr; gap: 20px; }
   .hero-verdict { text-align: left; flex-basis: 100%; }
 }
 @media (max-width: 640px) {
@@ -400,7 +441,7 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
   .cyclenav { order: 3; width: 100%; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 8px; }
   .cyclenav .range { min-width: 0; flex: 1; }
   .hero { padding: 18px 16px 16px; }
-  .alloc, .side-sec { padding-left: 16px; padding-right: 16px; }
+  .alloc, .side-sec, .balances { padding-left: 16px; padding-right: 16px; }
   .row { padding: 11px 14px; grid-template-columns: 34px minmax(0,1fr) auto; gap: 10px; }
   .row .rowedit { display: none; }
   .listhead, .group-label { padding-left: 14px; padding-right: 14px; }
@@ -430,11 +471,14 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
       <button class="iconbtn" id="prevCycle" aria-label="Previous cycle" title="Previous cycle">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg>
       </button>
-      <div class="range num" id="cycleRange">—</div>
+      <div class="range">
+        <span class="range-month" id="cycleMonth">—</span>
+        <span class="range-dates num" id="cycleDates"></span>
+      </div>
       <button class="iconbtn" id="nextCycle" aria-label="Next cycle" title="Next cycle">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m6 3 5 5-5 5"/></svg>
       </button>
-      <button class="iconbtn" id="todayBtn" aria-label="Jump to current cycle" title="Current cycle">
+      <button class="iconbtn" id="todayBtn" aria-label="Jump to the current month" title="Current month">
         <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="8" cy="8" r="5.2"/><path d="M8 5.4V8l1.9 1.2"/></svg>
       </button>
     </div>
@@ -458,7 +502,7 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
           <div class="eyebrow">Salary credited <span id="salaryDayLabel"></span></div>
           <div class="salary-line">
             <span class="salary-cur" id="curLabel">AED</span>
-            <input class="salary-amt num" id="salaryInput" type="text" inputmode="decimal" aria-label="Salary amount for this cycle">
+            <input class="salary-amt num" id="salaryInput" type="text" inputmode="decimal" aria-label="Salary amount for this month">
           </div>
           <div class="salary-sub" id="salarySub"></div>
         </div>
@@ -470,7 +514,7 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
       </div>
 
       <div class="rail-block">
-        <div class="eyebrow">Payment calendar for this cycle</div>
+        <div class="eyebrow" id="railTitle">Payment calendar</div>
         <div class="rail" id="rail"></div>
         <div class="rail-scale">
           <span id="railStart"></span>
@@ -488,10 +532,31 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
       <div class="alloclegend" id="allocLegend"></div>
     </section>
 
+    <section class="panel balances">
+      <div class="bal-head">
+        <h2>What you hold, what you owe</h2>
+        <button class="btn btn-quiet" id="addAcctBtn">
+          <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3.5v9M3.5 8h9"/></svg>
+          Add account
+        </button>
+      </div>
+      <div class="minitiles" id="balTiles"></div>
+      <div class="bal-cols">
+        <div class="bal-col">
+          <div class="eyebrow">Bank &amp; cash</div>
+          <div id="cashList"></div>
+        </div>
+        <div class="bal-col">
+          <div class="eyebrow" id="cardsEyebrow">Credit cards</div>
+          <div id="cardList"></div>
+        </div>
+      </div>
+    </section>
+
     <div class="split">
       <section class="panel">
         <div class="listhead">
-          <h2>Payments this cycle</h2>
+          <h2 id="listTitle">Payments</h2>
           <span class="count-pill num" id="listCount"></span>
         </div>
         <div id="list"></div>
@@ -523,7 +588,7 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
     <div class="dlg-body">
       <div class="field">
         <label for="f_name">Who gets paid</label>
-        <input id="f_name" name="name" required placeholder="e.g. ADCB Credit Card" autocomplete="off">
+        <input id="f_name" name="name" required placeholder="e.g. ADCB Credit Card" autocomplete="off" autofocus>
       </div>
       <div class="field-row">
         <div class="field">
@@ -550,9 +615,14 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
           <label for="f_repeat">Repeats</label>
           <select id="f_repeat" name="repeat">
             <option value="monthly">Every month</option>
-            <option value="once">This cycle only</option>
+            <option value="once">This month only</option>
           </select>
         </div>
+      </div>
+      <div class="field">
+        <label for="f_account">Paying off which card</label>
+        <select id="f_account" name="account"></select>
+        <p class="hint" id="f_accountHint"></p>
       </div>
       <div class="field">
         <label for="f_note">Note</label>
@@ -564,6 +634,44 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
       <span class="spacer"></span>
       <button type="button" class="btn btn-quiet" data-close>Cancel</button>
       <button type="submit" class="btn btn-primary" id="saveItem">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ---------- account dialog ---------- -->
+<dialog id="acctDlg">
+  <form method="dialog" id="acctForm">
+    <div class="dlg-head"><h2 id="acctDlgTitle">Add account</h2></div>
+    <div class="dlg-body">
+      <div class="field">
+        <label for="a_name">Name</label>
+        <input id="a_name" name="name" required placeholder="e.g. ADCB Credit Card" autocomplete="off" autofocus>
+      </div>
+      <div class="field">
+        <label for="a_kind">Type</label>
+        <select id="a_kind" name="kind">
+          <option value="card">Credit card</option>
+          <option value="bank">Bank account</option>
+          <option value="cash">Cash</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="a_balance" id="a_balanceLabel">Outstanding now</label>
+          <input id="a_balance" name="balance" type="number" step="0.01" placeholder="0.00">
+        </div>
+        <div class="field" id="a_limitField">
+          <label for="a_limit">Credit limit</label>
+          <input id="a_limit" name="limit" type="number" step="0.01" min="0" placeholder="0.00">
+        </div>
+      </div>
+      <p class="hint" id="a_hint"></p>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn btn-danger" id="deleteAcct" hidden>Delete</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn btn-quiet" data-close>Cancel</button>
+      <button type="submit" class="btn btn-primary" id="saveAcct">Save</button>
     </div>
   </form>
 </dialog>
@@ -582,7 +690,7 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
         <input id="s_cur" maxlength="5">
       </div>
     </div>
-    <p class="hint">The cycle runs from your salary day to the day before the next one. A payment due before the salary day is counted in the following month, which is when you actually pay it.</p>
+    <p class="hint">Each month runs from your salary day to the day before the next one, and is named for the calendar month it mostly covers — salary on 28 August pays September's bills, so it reads as September.</p>
     <div class="field">
       <label for="s_theme">Appearance</label>
       <select id="s_theme">
@@ -642,22 +750,33 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
   }
 
   function seedState() {
-    var seeds = [
-      ["CBD Credit Card",     "card", 15],
-      ["ADCB Credit Card",    "card", 5],
-      ["DIB Credit Card",     "card", 10],
-      ["Mashreq Credit Card", "card", 20],
-      ["Personal Loan",       "loan", 1],
-      ["Mobile Bill",         "bill", 8]
+    var cards = [
+      ["CBD Credit Card",     15],
+      ["ADCB Credit Card",     5],
+      ["DIB Credit Card",     10],
+      ["Mashreq Credit Card", 20]
     ];
+    var accounts = [
+      { id: uid(), kind: "bank", name: "Bank Account", balance: 0, limit: 0 },
+      { id: uid(), kind: "cash", name: "Cash", balance: 0, limit: 0 }
+    ];
+    var items = [];
+    cards.forEach(function (c) {
+      var acct = { id: uid(), kind: "card", name: c[0], balance: 0, limit: 0 };
+      accounts.push(acct);
+      items.push({ id: uid(), name: c[0], cat: "card", dueDay: c[1], amount: 0,
+                   note: "", repeat: "monthly", cycle: null, accountId: acct.id });
+    });
+    items.push({ id: uid(), name: "Personal Loan", cat: "loan", dueDay: 1, amount: 0, note: "", repeat: "monthly", cycle: null, accountId: null });
+    items.push({ id: uid(), name: "Mobile Bill",   cat: "bill", dueDay: 8, amount: 0, note: "", repeat: "monthly", cycle: null, accountId: null });
+
     return {
       v: 1,
       currency: "AED",
       salaryDay: 28,
       theme: "system",
-      items: seeds.map(function (s) {
-        return { id: uid(), name: s[0], cat: s[1], dueDay: s[2], amount: 0, note: "", repeat: "monthly", cycle: null };
-      }),
+      accounts: accounts,
+      items: items,
       cycles: {},
       updatedAt: Date.now()
     };
@@ -671,6 +790,17 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
     s.theme = s.theme === "light" || s.theme === "dark" ? s.theme : "system";
     s.cycles = s.cycles && typeof s.cycles === "object" ? s.cycles : {};
     s.updatedAt = Number(s.updatedAt) || 0;
+    s.accounts = (Array.isArray(s.accounts) ? s.accounts : []).map(function (a) {
+      return {
+        id: a.id || uid(),
+        kind: a.kind === "card" || a.kind === "cash" ? a.kind : "bank",
+        name: String(a.name || "Account"),
+        balance: num(a.balance),
+        limit: num(a.limit)
+      };
+    });
+    var acctIds = {};
+    s.accounts.forEach(function (a) { acctIds[a.id] = a.kind; });
     s.items = s.items.map(function (i) {
       return {
         id: i.id || uid(),
@@ -680,10 +810,38 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
         amount: num(i.amount),
         note: String(i.note || ""),
         repeat: i.repeat === "once" ? "once" : "monthly",
-        cycle: i.cycle || null
+        cycle: i.cycle || null,
+        // a link survives only while it still points at a real card
+        accountId: acctIds[i.accountId] === "card" ? i.accountId : null
       };
     });
     return s;
+  }
+
+  function accountById(id) {
+    for (var n = 0; n < state.accounts.length; n++) if (state.accounts[n].id === id) return state.accounts[n];
+    return null;
+  }
+  function accountsOfKind(kind) {
+    return state.accounts.filter(function (a) { return a.kind === kind; });
+  }
+
+  /* Money on hand, and how much of the card limits is used up. */
+  function balanceTotals() {
+    var cards = accountsOfKind("card");
+    var liquid = 0;
+    accountsOfKind("bank").concat(accountsOfKind("cash")).forEach(function (a) { liquid += a.balance; });
+    var owed = 0, limit = 0;
+    cards.forEach(function (a) { owed += a.balance; limit += a.limit; });
+    return {
+      liquid: liquid,
+      owed: owed,
+      limit: limit,
+      available: limit - owed,
+      used: limit > 0 ? owed / limit : 0,
+      cards: cards,
+      hasAny: state.accounts.length > 0
+    };
   }
 
   function clampInt(v, lo, hi, dflt) {
@@ -780,8 +938,13 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
     return d;
   }
 
-  function cycleData(key) {
-    if (!state.cycles[key]) state.cycles[key] = { salary: null, pay: {} };
+  /* Pass create only when about to write: merely looking at a cycle
+     should not litter the state with empty records for it. */
+  function cycleData(key, create) {
+    if (!state.cycles[key]) {
+      if (!create) return { salary: null, pay: {} };
+      state.cycles[key] = { salary: null, pay: {} };
+    }
     if (!state.cycles[key].pay) state.cycles[key].pay = {};
     return state.cycles[key];
   }
@@ -805,11 +968,20 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
       .map(function (i) {
         var rec = c.pay[i.id] || {};
         var due = dueDateIn(key, i.dueDay);
-        var amount = rec.amount != null ? num(rec.amount) : num(i.amount);
+        /* A card-linked payment is worth whatever is outstanding on that
+           card, so spending on the card shows up as next month's bill
+           without anything else being typed in. An amount entered for
+           this cycle still wins — a statement is fixed once it is
+           issued, even if the card is used again afterwards. */
+        var card = i.accountId ? accountById(i.accountId) : null;
+        var amount = rec.amount != null ? num(rec.amount)
+                   : card ? card.balance
+                   : num(i.amount);
         var paid = !!rec.paid;
         var days = Math.round((due - t) / 86400000);
         return {
           item: i, id: i.id, name: i.name, cat: i.cat, note: i.note,
+          card: card, overridden: rec.amount != null,
           due: due, amount: amount, paid: paid, paidOn: rec.paidOn || null,
           days: days,
           status: paid ? "paid" : days < 0 ? "overdue" : days <= 7 ? "soon" : "upcoming"
@@ -838,17 +1010,23 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
   var nf2 = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   var nf0 = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
   function money(n) { return nf2.format(n); }
-  function moneyShort(n) {
-    var a = Math.abs(n);
-    return a >= 1000 && a % 1 === 0 ? nf0.format(n) : nf2.format(n);
-  }
+  /* Summary figures drop the fils unless there are some, so a column of
+     balances lines up instead of mixing 12,400 with 800.00. */
+  function moneyShort(n) { return n % 1 === 0 ? nf0.format(n) : nf2.format(n); }
   var MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  function fmtDay(d) { return d.getDate() + " " + MON[d.getMonth()]; }
-  function fmtDayYear(d) { return d.getDate() + " " + MON[d.getMonth()] + " " + d.getFullYear(); }
-  function ordinal(n) {
-    var s = ["th", "st", "nd", "rd"], v = n % 100;
-    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  var MON_FULL = ["January", "February", "March", "April", "May", "June",
+                  "July", "August", "September", "October", "November", "December"];
+
+  /* The month a cycle belongs to, for labelling. A cycle straddles two
+     calendar months, so it is named for whichever one holds most of it —
+     the salary paid on 28 August covers September's bills, so it reads as
+     September. */
+  function cycleMonth(key) {
+    var s = cycleStart(key), e = cycleEnd(key);
+    var mid = new Date((s.getTime() + e.getTime()) / 2);
+    return { name: MON_FULL[mid.getMonth()], year: mid.getFullYear() };
   }
+  function fmtDay(d) { return d.getDate() + " " + MON[d.getMonth()]; }
   function relDays(n) {
     if (n === 0) return "today";
     if (n === 1) return "tomorrow";
@@ -861,9 +1039,10 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
      Render
      ========================================================== */
   var el = {};
-  ["cycleRange", "salaryDayLabel", "salaryInput", "salarySub", "curLabel", "verdictAmt", "verdictNote",
-   "rail", "railStart", "railMid", "railEnd", "stats", "allocBar", "allocLegend",
-   "list", "listCount", "catBreakdown", "next7"].forEach(function (id) { el[id] = document.getElementById(id); });
+  ["cycleMonth", "cycleDates", "salaryDayLabel", "salaryInput", "salarySub", "curLabel", "verdictAmt", "verdictNote",
+   "rail", "railTitle", "railStart", "railMid", "railEnd", "stats", "allocBar", "allocLegend",
+   "list", "listTitle", "listCount", "catBreakdown", "next7",
+   "balTiles", "cashList", "cardList", "cardsEyebrow"].forEach(function (id) { el[id] = document.getElementById(id); });
 
   function render() {
     applyTheme();
@@ -873,8 +1052,12 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
     var now = today();
     var isCurrent = cycleKeyFor(now, state.salaryDay) === key;
 
-    el.cycleRange.textContent = fmtDay(start) + " – " + fmtDayYear(end);
-    el.salaryDayLabel.textContent = "on the " + ordinal(state.salaryDay);
+    var month = cycleMonth(key);
+    el.cycleMonth.textContent = month.name + " " + month.year;
+    el.cycleDates.textContent = fmtDay(start) + " – " + fmtDay(end);
+    el.railTitle.textContent = "Payment calendar for " + month.name;
+    el.listTitle.textContent = month.name + " payments";
+    el.salaryDayLabel.textContent = fmtDay(start);
     el.curLabel.textContent = state.currency;
     if (document.activeElement !== el.salaryInput) el.salaryInput.value = money(t.salary);
 
@@ -883,7 +1066,7 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
     var leftDays = totalDays - elapsed;
     el.salarySub.innerHTML = isCurrent
       ? "Day <b>" + (elapsed + 1) + "</b> of " + totalDays + " — <b>" + leftDays + "</b> days until the next salary"
-      : (now > end ? "Closed cycle — " + totalDays + " days" : "Upcoming cycle — starts in <b>" + Math.round((start - now) / 86400000) + "</b> days");
+      : (now > end ? "Finished month — " + totalDays + " days" : "Still to come — starts in <b>" + Math.round((start - now) / 86400000) + "</b> days");
 
     // verdict
     el.verdictAmt.textContent = (t.left < 0 ? "−" : "") + state.currency + " " + money(Math.abs(t.left));
@@ -901,9 +1084,68 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
     renderRail(key, start, end, t, isCurrent, now);
     renderStats(t, isCurrent);
     renderAlloc(t);
+    renderBalances(key);
     renderList(t);
     renderCats(t);
     renderNext7(t, isCurrent, now);
+  }
+
+  function renderBalances(key) {
+    var b = balanceTotals();
+    var nextKey = shiftKey(key, 1);
+    var nextMonth = totals(nextKey);
+    var nextName = cycleMonth(nextKey).name;
+    var usedPct = Math.round(b.used * 100);
+
+    var tiles = [
+      { k: "Money on hand", v: b.liquid,
+        f: accountsOfKind("bank").length + accountsOfKind("cash").length
+             ? "across " + (accountsOfKind("bank").length + accountsOfKind("cash").length) + " bank and cash accounts"
+             : "add a bank account or cash" },
+      { k: "Owed on cards", v: b.owed,
+        f: b.limit > 0 ? usedPct + "% of a " + moneyShort(b.limit) + " limit" : "add your card limits",
+        cls: b.limit > 0 && usedPct >= 90 ? "danger" : b.limit > 0 && usedPct >= 70 ? "warn" : "" },
+      { k: "Credit still available", v: b.available,
+        f: b.limit > 0 ? "total limit " + moneyShort(b.limit) : "no limits set yet",
+        cls: b.available < 0 ? "danger" : "" },
+      { k: nextName + " payments", v: nextMonth.committed,
+        f: nextMonth.rows.length + " payment" + (nextMonth.rows.length === 1 ? "" : "s") + " already lined up" }
+    ];
+    el.balTiles.innerHTML = tiles.map(function (c) {
+      return '<div class="minitile ' + (c.cls || "") + '">' +
+        '<div class="eyebrow">' + esc(c.k) + '</div>' +
+        '<div class="v">' + moneyShort(c.v) + '</div>' +
+        '<div class="f">' + esc(c.f) + '</div></div>';
+    }).join("");
+
+    var cash = accountsOfKind("bank").concat(accountsOfKind("cash"));
+    el.cashList.innerHTML = cash.length ? cash.map(function (a) {
+      return '<button class="acct" data-acct="' + a.id + '">' +
+        '<span class="nm">' + esc(a.name) + '</span>' +
+        '<span class="bal">' + moneyShort(a.balance) + '</span>' +
+        '<span class="sub">' + (a.kind === "cash" ? "Cash in hand" : "Bank balance") + '</span>' +
+      '</button>';
+    }).join("") : '<p class="hint">No bank or cash accounts yet. Add one to see everything you hold in one place.</p>';
+
+    el.cardsEyebrow.textContent = b.limit > 0
+      ? "Credit cards — " + moneyShort(b.owed) + " of " + moneyShort(b.limit) + " used"
+      : "Credit cards";
+
+    el.cardList.innerHTML = b.cards.length ? b.cards.map(function (a) {
+      var pct = a.limit > 0 ? Math.round((a.balance / a.limit) * 100) : 0;
+      var lvl = pct >= 90 ? "danger" : pct >= 70 ? "warn" : "";
+      return '<button class="acct" data-acct="' + a.id + '">' +
+        '<span class="nm">' + esc(a.name) + '</span>' +
+        '<span class="bal">' + moneyShort(a.balance) + '</span>' +
+        '<span class="sub">' +
+          (a.limit > 0
+            ? '<span class="usage"><i class="' + lvl + '" style="width:' + Math.min(100, Math.max(0, pct)) + '%"></i></span>' +
+              '<span class="pct ' + lvl + '">' + pct + '%</span>' +
+              '<span>' + moneyShort(a.limit - a.balance) + ' left of ' + moneyShort(a.limit) + '</span>'
+            : '<span>No limit set — tap to add it</span>') +
+        '</span>' +
+      '</button>';
+    }).join("") : '<p class="hint">No cards yet. Add one with its limit, then link it to its payment so what you spend shows up as next month\'s bill.</p>';
   }
 
   function renderRail(key, start, end, t, isCurrent, now) {
@@ -976,14 +1218,14 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
   var GROUPS = [
     { k: "overdue", label: "Overdue", cls: "overdue" },
     { k: "soon", label: "Due within 7 days", cls: "soon" },
-    { k: "upcoming", label: "Later this cycle", cls: "" },
+    { k: "upcoming", label: "Later this month", cls: "" },
     { k: "paid", label: "Paid", cls: "done" }
   ];
 
   function renderList(t) {
     el.listCount.textContent = t.rows.filter(function (r) { return !r.paid; }).length + " left";
     if (!t.rows.length) {
-      el.list.innerHTML = '<div class="empty">No payments in this cycle yet.<br>Add the first one to start tracking.</div>';
+      el.list.innerHTML = '<div class="empty">No payments this month yet.<br>Add the first one to start tracking.</div>';
       return;
     }
     var html = "";
@@ -1012,10 +1254,11 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
         '<div class="row-meta">' +
           '<span class="chip"><span class="swatch" style="background:' + catColor(r.cat) + '"></span>' + catLabel(r.cat) + '</span>' +
           '<span class="due' + dueCls + '">' + esc(dueTxt) + '</span>' +
+          (r.card && !r.overridden ? '<span class="chip">follows card balance</span>' : "") +
           (r.note ? '<span class="chip">' + esc(r.note) + '</span>' : "") +
         '</div>' +
       '</div>' +
-      '<button class="row-amt" data-amount="' + r.id + '" style="background:none;border:0;cursor:text" title="Click to change the amount for this cycle">' + money(r.amount) + '</button>' +
+      '<button class="row-amt" data-amount="' + r.id + '" style="background:none;border:0;cursor:text" title="Click to change the amount for this month">' + money(r.amount) + '</button>' +
       '<button class="iconbtn rowedit" data-edit="' + r.id + '" aria-label="' + esc("Edit " + r.name) + '">' +
         '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11.2 2.6 13.4 4.8 5.6 12.6l-3 .8.8-3z"/></svg>' +
       '</button>' +
@@ -1027,7 +1270,7 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
     var rows = CAT_ORDER.filter(function (c) { return t.byCat[c] > 0; });
     if (!rows.length) {
       el.catBreakdown.innerHTML = '<p class="hint">' +
-        (t.rows.length ? "None of this cycle's payments have an amount yet." : "Nothing scheduled in this cycle.") + '</p>';
+        (t.rows.length ? "None of this month's payments have an amount yet." : "Nothing scheduled this month.") + '</p>';
       return;
     }
     el.catBreakdown.innerHTML = rows.map(function (c) {
@@ -1045,7 +1288,7 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
     var rows = t.rows.filter(function (r) { return !r.paid && r.days <= 7; });
     if (!isCurrent) rows = t.rows.filter(function (r) { return !r.paid; }).slice(0, 6);
     if (!rows.length) {
-      el.next7.innerHTML = '<p class="hint">Nothing due in the next week. ' + (t.unpaid > 0 ? moneyShort(t.unpaid) + " still to pay later this cycle." : "This cycle is fully paid.") + '</p>';
+      el.next7.innerHTML = '<p class="hint">Nothing due in the next week. ' + (t.unpaid > 0 ? moneyShort(t.unpaid) + " still to pay later this month." : "This month is fully paid.") + '</p>';
       return;
     }
     el.next7.innerHTML = rows.map(function (r) {
@@ -1084,7 +1327,7 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
     this.select();
   });
   el.salaryInput.addEventListener("blur", function () {
-    cycleData(viewKey).salary = num(this.value.replace(/[^0-9.\-]/g, ""));
+    cycleData(viewKey, true).salary = num(this.value.replace(/[^0-9.\-]/g, ""));
     commit();
   });
   el.salaryInput.addEventListener("keydown", function (e) { if (e.key === "Enter") this.blur(); });
@@ -1099,6 +1342,9 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
     var ed = e.target.closest("[data-edit]");
     if (ed) { openItem(ed.getAttribute("data-edit")); return; }
 
+    var ac = e.target.closest("[data-acct]");
+    if (ac) { openAccount(ac.getAttribute("data-acct")); return; }
+
     var close = e.target.closest("[data-close]");
     if (close) { var d = close.closest("dialog"); if (d) d.close(); return; }
   });
@@ -1112,7 +1358,7 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
   });
 
   function togglePaid(id) {
-    var c = cycleData(viewKey);
+    var c = cycleData(viewKey, true);
     var rec = c.pay[id] || (c.pay[id] = {});
     rec.paid = !rec.paid;
     rec.paidOn = rec.paid ? new Date().toISOString().slice(0, 10) : null;
@@ -1123,9 +1369,9 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
     var rows = paymentsFor(viewKey);
     var r = rows.filter(function (x) { return x.id === id; })[0];
     if (!r) return;
-    var v = prompt("Amount for " + r.name + " in this cycle (" + state.currency + "):", String(r.amount));
+    var v = prompt("Amount for " + r.name + " this month (" + state.currency + "):", String(r.amount));
     if (v === null) return;
-    var c = cycleData(viewKey);
+    var c = cycleData(viewKey, true);
     var rec = c.pay[id] || (c.pay[id] = {});
     rec.amount = num(v);
     commit();
@@ -1147,10 +1393,33 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
     itemForm.cat.value = i ? i.cat : "card";
     itemForm.repeat.value = i ? i.repeat : "monthly";
     itemForm.note.value = i ? i.note : "";
+
+    var cards = accountsOfKind("card");
+    itemForm.account.innerHTML = '<option value="">Not a card — fixed amount</option>' +
+      cards.map(function (a) {
+        return '<option value="' + a.id + '">' + esc(a.name) + "</option>";
+      }).join("");
+    itemForm.account.value = i && i.accountId ? i.accountId : "";
+    if (!cards.length) itemForm.account.value = "";
+    syncItemAccount();
+
     deleteBtn.hidden = !i;
-    itemDlg.showModal();
-    setTimeout(function () { itemForm.name.focus(); }, 30);
+    itemDlg.showModal();   // autofocus on the name field handles focus
   }
+
+  /* A card-linked payment takes its amount from the card, so the fixed
+     amount field would be a lie sitting next to it. */
+  function syncItemAccount() {
+    var card = itemForm.account.value ? accountById(itemForm.account.value) : null;
+    var amountField = itemForm.amount.closest(".field");
+    amountField.hidden = !!card;
+    document.getElementById("f_accountHint").textContent = card
+      ? "Amount follows this card: " + state.currency + " " + money(card.balance) + " outstanding right now."
+      : accountsOfKind("card").length
+        ? "Link it to a card and the amount follows what is outstanding on that card."
+        : "Add a credit card under “What you hold, what you owe” to link one here.";
+  }
+  itemForm.account.onchange = syncItemAccount;
 
   itemForm.addEventListener("submit", function () {
     var data = {
@@ -1159,7 +1428,8 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
       dueDay: clampInt(itemForm.dueDay.value, 1, 31, 1),
       cat: itemForm.cat.value,
       repeat: itemForm.repeat.value,
-      note: itemForm.note.value.trim()
+      note: itemForm.note.value.trim(),
+      accountId: itemForm.account.value || null
     };
     if (editingId) {
       state.items = state.items.map(function (i) { return i.id === editingId ? Object.assign({}, i, data) : i; });
@@ -1174,7 +1444,7 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
 
   deleteBtn.onclick = function () {
     if (!editingId) return;
-    if (!confirm("Delete this payment from every cycle?")) return;
+    if (!confirm("Delete this payment from every month?")) return;
     state.items = state.items.filter(function (i) { return i.id !== editingId; });
     Object.keys(state.cycles).forEach(function (k) {
       if (state.cycles[k].pay) delete state.cycles[k].pay[editingId];
@@ -1186,6 +1456,70 @@ dialog::backdrop { background: rgba(8,14,12,.45); backdrop-filter: blur(2px); }
 
   document.getElementById("addBtn").onclick = function () { openItem(null); };
   document.getElementById("fabBtn").onclick = function () { openItem(null); };
+
+  /* ---------- account dialog ---------- */
+  var acctDlg = document.getElementById("acctDlg");
+  var acctForm = document.getElementById("acctForm");
+  var deleteAcctBtn = document.getElementById("deleteAcct");
+  var editingAcct = null;
+
+  function syncAcctKind() {
+    var isCard = acctForm.kind.value === "card";
+    document.getElementById("a_limitField").hidden = !isCard;
+    document.getElementById("a_balanceLabel").textContent = isCard ? "Outstanding now" : "Balance now";
+    document.getElementById("a_hint").textContent = isCard
+      ? "Update the outstanding figure whenever you use the card. Any payment linked to it follows that number, so what you spend today shows as next month's bill."
+      : "What is sitting in the account right now.";
+  }
+  acctForm.kind.onchange = syncAcctKind;
+
+  function openAccount(id) {
+    editingAcct = id || null;
+    var a = id ? accountById(id) : null;
+    document.getElementById("acctDlgTitle").textContent = a ? "Edit account" : "Add account";
+    acctForm.name.value = a ? a.name : "";
+    acctForm.kind.value = a ? a.kind : "card";
+    acctForm.balance.value = a ? (a.balance || "") : "";
+    acctForm.limit.value = a ? (a.limit || "") : "";
+    deleteAcctBtn.hidden = !a;
+    syncAcctKind();
+    acctDlg.showModal();
+  }
+
+  acctForm.addEventListener("submit", function () {
+    var isCard = acctForm.kind.value === "card";
+    var data = {
+      name: acctForm.name.value.trim() || "Account",
+      kind: acctForm.kind.value,
+      balance: num(acctForm.balance.value),
+      limit: isCard ? num(acctForm.limit.value) : 0
+    };
+    if (editingAcct) {
+      state.accounts = state.accounts.map(function (a) { return a.id === editingAcct ? Object.assign({}, a, data) : a; });
+    } else {
+      data.id = uid();
+      state.accounts.push(data);
+    }
+    editingAcct = null;
+    commit();
+  });
+
+  deleteAcctBtn.onclick = function () {
+    if (!editingAcct) return;
+    var linked = state.items.filter(function (i) { return i.accountId === editingAcct; });
+    var msg = linked.length
+      ? "Delete this account? " + linked.length + " payment" + (linked.length === 1 ? "" : "s") +
+        " linked to it will fall back to their own fixed amounts."
+      : "Delete this account?";
+    if (!confirm(msg)) return;
+    state.accounts = state.accounts.filter(function (a) { return a.id !== editingAcct; });
+    state.items.forEach(function (i) { if (i.accountId === editingAcct) i.accountId = null; });
+    editingAcct = null;
+    acctDlg.close();
+    commit();
+  };
+
+  document.getElementById("addAcctBtn").onclick = function () { openAccount(null); };
 
   /* ---------- settings ---------- */
   var setDlg = document.getElementById("settingsDlg");
