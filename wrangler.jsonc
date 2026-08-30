@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "income-expense-tracker",
+  "name": "incomeexpense",
   "main": "worker/index.js",
   "compatibility_date": "2026-08-01",
   "observability": { "enabled": true },
