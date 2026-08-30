@@ -77,10 +77,6 @@ no build step, no framework, no cold-start dependencies.
 npm install
 npx wrangler login             # once, links the Cloudflare account
 
-npm run db:create              # creates the D1 database, prints a database_id
-# paste that id into wrangler.jsonc -> d1_databases[0].database_id
-
-npm run db:remote              # applies migrations/0001_init.sql to the live database
 npm run deploy                 # publishes to <name>.<subdomain>.workers.dev
 ```
 
@@ -91,6 +87,10 @@ npm run db:local               # migrations against the local D1 emulator
 npm run dev                    # http://localhost:8787
 npm test                       # month roll-up and validation rules
 ```
+
+The `income-expense-tracker` D1 database already exists and its id is in `wrangler.jsonc`, with
+`migrations/0001_init.sql` applied. Starting over on another account? Run `npm run db:create`, paste
+the id it prints into `wrangler.jsonc`, then `npm run db:remote` before deploying.
 
 Local runs use a D1 emulator under `.wrangler/`, so nothing touches the deployed database.
 

@@ -11,12 +11,12 @@
     "binding": "ASSETS"
   },
 
-  // Run `npm run db:create` once, then paste the id it prints here.
+  // Live database: income-expense-tracker (created 2026-08-30).
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "income-expense-tracker",
-      "database_id": "REPLACE_WITH_YOUR_DATABASE_ID",
+      "database_id": "aef06294-e7e9-4f15-ab95-6c1f5f18a5ca",
       "migrations_dir": "migrations"
     }
   ]
