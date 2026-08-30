@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+
+# Local tracker database (personal data, created on first run)
+finance_tracker.db
