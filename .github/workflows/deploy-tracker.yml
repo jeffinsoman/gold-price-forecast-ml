@@ -1,0 +1,35 @@
+# Deploys the income vs expense tracker (Worker + D1) to Cloudflare.
+# Manual trigger only: run it from the Actions tab, or ask Claude to run it.
+# Needs a repository secret CLOUDFLARE_API_TOKEN ("Edit Cloudflare Workers" template).
+# CLOUDFLARE_ACCOUNT_ID is optional; add it only if the deploy reports more than one account.
+name: Deploy tracker
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Test the month roll-up rules
+        run: npm test
+
+      - name: Deploy to Cloudflare
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: deploy
