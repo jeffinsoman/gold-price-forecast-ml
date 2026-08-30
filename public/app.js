@@ -1,11 +1,13 @@
 // Front-end for the Income vs Expense Tracker. Talks to the Worker API under /api.
 
+const DEFAULT_CURRENCY = "AED";
+
 const state = {
   today: new Date().toISOString().slice(0, 10),
   currentMonth: "",
   months: [],
   options: {},
-  currency: localStorage.getItem("currency") || "₹",
+  currency: localStorage.getItem("currency") || DEFAULT_CURRENCY,
   dashMonth: "",
   txMonth: "",
 };
@@ -354,11 +356,20 @@ function bindTabs() {
   });
 }
 
+function paintBrandMark() {
+  const mark = $("brand-mark");
+  mark.textContent = state.currency;
+  mark.classList.toggle("wide", state.currency.length > 1);
+}
+
 function bindCurrency() {
   const input = $("currency");
   input.value = state.currency;
+  paintBrandMark();
   input.addEventListener("change", async () => {
-    state.currency = input.value.trim() || "₹";
+    state.currency = input.value.trim() || DEFAULT_CURRENCY;
+    input.value = state.currency;
+    paintBrandMark();
     localStorage.setItem("currency", state.currency);
     await loadDashboard(state.dashMonth);
     if (state.txMonth) await loadTransactions(state.txMonth);

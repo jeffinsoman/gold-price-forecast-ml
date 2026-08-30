@@ -106,6 +106,9 @@ the card red. A custom budget can be pinned per month from the Transactions tab.
 shows income split by account, expense split by payment method, a six-month comparison, how much of
 the month's spending is already paid vs still due, and the list of upcoming expenses.
 
+Amounts show in **AED** by default; the field in the top-right switches the label to any other
+currency and remembers the choice in that browser.
+
 ### Add income
 Date plus amount, received into one of two places:
 

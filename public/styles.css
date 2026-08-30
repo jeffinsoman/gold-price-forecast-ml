@@ -51,9 +51,10 @@ p { margin: 0; }
   width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
   background: linear-gradient(135deg, #16a34a, #0ea5e9); color: #fff; font-size: 1.2rem; font-weight: 700;
 }
+.brand-mark.wide { font-size: 0.78rem; letter-spacing: 0.02em; }
 .brand-sub { color: var(--muted); font-size: 0.85rem; }
 .currency { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 0.85rem; }
-.currency input { width: 60px; text-align: center; }
+.currency input { width: 74px; text-align: center; }
 
 .tabs { display: flex; gap: 4px; padding: 12px 20px 0; overflow-x: auto; }
 .tab {
