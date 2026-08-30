@@ -52,7 +52,7 @@ This terminal operates on four distinct analytical layers:
    
 2. **Install dependencies:**
    ```bash
-   pip install -r requirements.txt
+   pip install -r requirements-ml.txt
    ```
 
 3. **Execute the pipeline sequentially:**
@@ -93,6 +93,10 @@ The `income-expense-tracker` D1 database already exists and its id is in `wrangl
 the id it prints into `wrangler.jsonc`, then `npm run db:remote` before deploying.
 
 Local runs use a D1 emulator under `.wrangler/`, so nothing touches the deployed database.
+
+The forecaster's Python dependencies live in `requirements-ml.txt`, not `requirements.txt`: Cloudflare's
+build image installs any root `requirements.txt` it finds, which pulled torch and the CUDA stack into
+every Worker build. The Worker needs none of it.
 
 ### Dashboard (first page)
 Opens on the current month and answers one question — did this month stay inside the budget?
