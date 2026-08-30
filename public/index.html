@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="light dark" />
+<title>Income vs Expense Tracker</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%92%B0</text></svg>" />
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">₹</span>
+    <div>
+      <h1>Income vs Expense</h1>
+      <p class="brand-sub">Month by month, are you inside the budget?</p>
+    </div>
+  </div>
+  <label class="currency">
+    Currency
+    <input id="currency" type="text" maxlength="3" value="₹" />
+  </label>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab is-active" data-page="dashboard">Dashboard</button>
+  <button class="tab" data-page="income">Add income</button>
+  <button class="tab" data-page="expense">Add expense</button>
+  <button class="tab" data-page="transactions">Transactions</button>
+</nav>
+
+<main>
+  <!-- DASHBOARD -->
+  <section id="page-dashboard" class="page">
+    <div class="row between">
+      <h2>Dashboard</h2>
+      <label class="field inline">Month <select id="dash-month"></select></label>
+    </div>
+
+    <div id="status-card" class="status-card">
+      <p class="status-headline">Loading…</p>
+      <p class="status-detail"></p>
+    </div>
+
+    <div class="tiles">
+      <div class="tile"><span class="tile-label">Income</span><span class="tile-value" id="tile-income">—</span></div>
+      <div class="tile"><span class="tile-label">Expense</span><span class="tile-value" id="tile-expense">—</span><span class="tile-foot" id="tile-upcoming"></span></div>
+      <div class="tile"><span class="tile-label">Balance</span><span class="tile-value" id="tile-balance">—</span></div>
+      <div class="tile"><span class="tile-label" id="tile-budget-label">Budget left</span><span class="tile-value" id="tile-budget">—</span></div>
+    </div>
+
+    <div class="meter"><div class="meter-fill" id="budget-meter"></div></div>
+    <p class="muted small" id="budget-note"></p>
+
+    <div class="split">
+      <div class="panel">
+        <h3>Income by account</h3>
+        <ul class="bars" id="income-split"></ul>
+      </div>
+      <div class="panel">
+        <h3>Expense by payment method</h3>
+        <ul class="bars" id="expense-split"></ul>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Last 6 months</h3>
+      <div class="trend" id="trend"></div>
+      <p class="legend"><span class="key key-income"></span>Income <span class="key key-expense"></span>Expense</p>
+    </div>
+
+    <div class="panel">
+      <h3>Upcoming expenses <span class="pill" id="upcoming-count">0</span></h3>
+      <div id="upcoming"></div>
+    </div>
+  </section>
+
+  <!-- ADD INCOME -->
+  <section id="page-income" class="page hidden">
+    <h2>Add income</h2>
+    <p class="muted">Pick the date and where the money landed.</p>
+    <form id="income-form" class="card form">
+      <div class="grid">
+        <label class="field">Date <input type="date" name="date" required /></label>
+        <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" placeholder="9000" required /></label>
+      </div>
+      <fieldset class="field">
+        <legend>Received in</legend>
+        <div class="choices" id="income-accounts"></div>
+      </fieldset>
+      <div class="grid">
+        <label class="field">Category <select name="category" id="income-categories"></select></label>
+        <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
+      </div>
+      <button class="primary" type="submit">Save income</button>
+      <p class="form-msg" id="income-msg"></p>
+    </form>
+    <div class="panel"><h3>Recent income</h3><div id="income-recent"></div></div>
+  </section>
+
+  <!-- ADD EXPENSE -->
+  <section id="page-expense" class="page hidden">
+    <h2>Add expense</h2>
+    <p class="muted">Spent today, or due later — a future date is booked into that month and shown as upcoming.</p>
+    <form id="expense-form" class="card form">
+      <fieldset class="field">
+        <legend>When</legend>
+        <div class="choices" id="expense-when">
+          <label class="choice"><input type="radio" name="when" value="today" checked /><span>Today</span></label>
+          <label class="choice"><input type="radio" name="when" value="future" /><span>Future date</span></label>
+        </div>
+      </fieldset>
+      <div class="grid">
+        <label class="field">Date <input type="date" name="date" required /></label>
+        <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" placeholder="5000" required /></label>
+      </div>
+      <fieldset class="field">
+        <legend>Paid by</legend>
+        <div class="choices" id="expense-methods"></div>
+      </fieldset>
+      <div class="grid">
+        <label class="field">Category <select name="category" id="expense-categories"></select></label>
+        <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
+      </div>
+      <button class="primary" type="submit">Save expense</button>
+      <p class="form-msg" id="expense-msg"></p>
+    </form>
+    <div class="panel"><h3>Recent expenses</h3><div id="expense-recent"></div></div>
+  </section>
+
+  <!-- TRANSACTIONS -->
+  <section id="page-transactions" class="page hidden">
+    <div class="row between">
+      <h2>Transactions</h2>
+      <label class="field inline">Month <select id="tx-month"></select></label>
+    </div>
+
+    <div class="card">
+      <h3>Budget for this month</h3>
+      <p class="muted small" id="budget-help"></p>
+      <div class="row wrap">
+        <input type="number" id="budget-input" min="0" step="100" placeholder="Custom budget" />
+        <button class="primary" id="budget-save">Save budget</button>
+        <button class="ghost" id="budget-clear">Use this month's income</button>
+      </div>
+      <p class="form-msg" id="budget-msg"></p>
+    </div>
+
+    <div class="panel"><h3>Income</h3><div id="tx-income"></div></div>
+    <div class="panel"><h3>Expenses</h3><div id="tx-expenses"></div></div>
+  </section>
+</main>
+
+<script src="/app.js" type="module"></script>
+</body>
+</html>

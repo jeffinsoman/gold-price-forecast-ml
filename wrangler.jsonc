@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "income-expense-tracker",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-08-01",
+  "observability": { "enabled": true },
+
+  // The dashboard, forms and styles are plain static files.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+
+  // Run `npm run db:create` once, then paste the id it prints here.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "income-expense-tracker",
+      "database_id": "REPLACE_WITH_YOUR_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

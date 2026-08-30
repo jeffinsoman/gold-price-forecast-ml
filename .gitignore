@@ -1,5 +1,7 @@
 __pycache__/
 *.pyc
 
-# Local tracker database (personal data, created on first run)
-finance_tracker.db
+# Node / Wrangler
+node_modules/
+.wrangler/
+.dev.vars

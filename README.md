@@ -65,15 +65,34 @@ This terminal operates on four distinct analytical layers:
 
 ---
 
-## Income vs Expense Tracker (Monthly)
+## Income vs Expense Tracker (Cloudflare Workers + D1)
 
-A second, self-contained Streamlit app in this repo for tracking personal cash flow month by month.
+A second app in this repo: a monthly personal cash-flow tracker that runs entirely on Cloudflare.
+A Worker serves the API, D1 stores the entries, and the dashboard is plain static HTML/CSS/JS —
+no build step, no framework, no cold-start dependencies.
+
+### Deploy it
 
 ```bash
-streamlit run finance_tracker.py
+npm install
+npx wrangler login             # once, links the Cloudflare account
+
+npm run db:create              # creates the D1 database, prints a database_id
+# paste that id into wrangler.jsonc -> d1_databases[0].database_id
+
+npm run db:remote              # applies migrations/0001_init.sql to the live database
+npm run deploy                 # publishes to <name>.<subdomain>.workers.dev
 ```
 
-Entries are stored locally in `finance_tracker.db` (SQLite, created on first run and git-ignored).
+### Run it locally
+
+```bash
+npm run db:local               # migrations against the local D1 emulator
+npm run dev                    # http://localhost:8787
+npm test                       # month roll-up and validation rules
+```
+
+Local runs use a D1 emulator under `.wrangler/`, so nothing touches the deployed database.
 
 ### Dashboard (first page)
 Opens on the current month and answers one question — did this month stay inside the budget?
@@ -83,9 +102,9 @@ Opens on the current month and answers one question — did this month stay insi
 > With an expense of 5,000 instead, the same month reads **IN CONTROL** — 4,000 left.
 
 The budget for a month is that month's income by default, so spending more than you earned turns
-the card red. A custom budget can be pinned per month from the Transactions page. The dashboard
-also shows income split by account, expense split by payment method, day-by-day bars, a six-month
-trend, and the list of expenses still due later in the month.
+the card red. A custom budget can be pinned per month from the Transactions tab. The dashboard also
+shows income split by account, expense split by payment method, a six-month comparison, how much of
+the month's spending is already paid vs still due, and the list of upcoming expenses.
 
 ### Add income
 Date plus amount, received into one of two places:
@@ -95,19 +114,29 @@ Date plus amount, received into one of two places:
 
 ### Add expense
 Dated **today** or **future dated** (a bill or EMI due later). A future-dated expense is booked into
-the month it falls in and shown on the dashboard as *upcoming* until its date arrives. Paid by:
+the month it falls in and shown as *upcoming* until its date arrives. Paid by:
 
 * **Cash**
 * **Bank**
 * **Credit Card**
 
+### API
+
+| Method | Route | Purpose |
+| --- | --- | --- |
+| GET | `/api/bootstrap` | Form choices, today's date, months that have entries |
+| GET | `/api/month/:month` | Summary, six-month trend, entries and upcoming list for `2026-09` |
+| POST | `/api/income` | `{ date, amount, account, category, note }` |
+| POST | `/api/expense` | `{ date, amount, method, category, note }` |
+| DELETE | `/api/income/:id` · `/api/expense/:id` | Remove an entry |
+| PUT | `/api/budget` | `{ month, amount }`, or `amount: null` to fall back to income |
+
 ### Layout
 | Path | What it is |
 | --- | --- |
-| `finance_tracker.py` | Streamlit UI: Dashboard, Add income, Add expense, Transactions |
-| `finance/store.py` | SQLite storage and the monthly roll-up rules (standard library only) |
-| `tests/test_finance_store.py` | Tests for the budget, upcoming-expense and split logic |
-
-```bash
-python -m unittest discover -s tests
-```
+| `worker/index.js` | Worker: API routes and D1 queries |
+| `worker/summary.js` | Month roll-up rules and input validation (no Worker globals, unit tested) |
+| `public/` | Dashboard, forms and styles served as static assets |
+| `migrations/` | D1 schema |
+| `test/` | Tests for the budget, upcoming-expense and validation logic |
+| `wrangler.jsonc` | Worker name, assets binding and the D1 binding (`DB`) |
