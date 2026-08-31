@@ -150,6 +150,18 @@ Lending is not an expense, so it never touches the month's verdict — but it do
 the dashboard's **What you hold now** panel nets it out: income, minus spending, minus what is lent,
 plus what has been repaid, per account.
 
+### Using it
+Every account, payment method and category carries a symbol, and the pages are built to be tapped
+rather than typed into:
+
+* **Category chips** — pick 🍽️ Food or 🛒 Groceries with one tap instead of hunting a dropdown.
+* **Quick amounts** — `+50 / +100 / +500 / +1,000` add to the amount field; `clear` resets it.
+* **Where it went** — spending by category with its share of the month; tap a row to unfold the
+  entries behind the number.
+* **Last 6 months** — tap any month in the chart to move the whole dashboard to it.
+* **Live totals** — tiles count up to their new value when something changes, and every save,
+  edit or delete raises a toast confirming what happened.
+
 ### Editing
 Income, expenses, loans and repayments are all editable from their lists — the pencil opens a dialog
 with the same fields as the original form. Deleting a loan removes its repayments with it.

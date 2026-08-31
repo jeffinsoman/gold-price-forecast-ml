@@ -169,6 +169,16 @@ async function monthTrend(db, month) {
   });
 }
 
+/** What the month went on, biggest first — the dashboard draws this as a breakdown. */
+async function monthCategories(db, month) {
+  const [expense, income] = await db.batch([
+    db.prepare("SELECT category, SUM(amount) AS total FROM expense WHERE month = ?1 GROUP BY category ORDER BY total DESC").bind(month),
+    db.prepare("SELECT category, SUM(amount) AS total FROM income WHERE month = ?1 GROUP BY category ORDER BY total DESC").bind(month),
+  ]);
+  const shape = (rows) => rows.map((row) => ({ category: row.category, total: Number(row.total) }));
+  return { expense: shape(expense.results), income: shape(income.results) };
+}
+
 async function monthEntries(db, month) {
   const [income, expense] = await db.batch([
     db.prepare("SELECT * FROM income WHERE month = ?1 ORDER BY date DESC, id DESC").bind(month),
@@ -266,12 +276,13 @@ async function handleApi(request, env, url) {
   if (method === "GET" && path.startsWith("month/")) {
     const month = path.slice("month/".length);
     if (!isMonth(month)) return fail("Month must look like 2026-09.");
-    const [summary, trend, entries, accounts, lending] = await Promise.all([
+    const [summary, trend, entries, accounts, lending, categories] = await Promise.all([
       monthSummary(db, month),
       monthTrend(db, month),
       monthEntries(db, month),
       accountBalances(db, month),
       listLoans(db),
+      monthCategories(db, month),
     ]);
     const upcoming = entries.expenses.filter((row) => row.date > today());
     return json({
@@ -279,6 +290,7 @@ async function handleApi(request, env, url) {
       trend,
       ...entries,
       upcoming,
+      categories,
       accounts,
       lending: { totals: lending.totals, open: lending.loans.filter((row) => row.outstanding > 0).length },
       months: await availableMonths(db),

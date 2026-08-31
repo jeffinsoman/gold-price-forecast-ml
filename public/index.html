@@ -24,11 +24,11 @@
 </header>
 
 <nav class="tabs" id="tabs">
-  <button class="tab is-active" data-page="dashboard">Dashboard</button>
-  <button class="tab" data-page="income">Add income</button>
-  <button class="tab" data-page="expense">Add expense</button>
-  <button class="tab" data-page="friends">Friends</button>
-  <button class="tab" data-page="transactions">Transactions</button>
+  <button class="tab is-active" data-page="dashboard"><span aria-hidden="true">📊</span> Dashboard</button>
+  <button class="tab" data-page="income"><span aria-hidden="true">💰</span> Income</button>
+  <button class="tab" data-page="expense"><span aria-hidden="true">🧾</span> Expense</button>
+  <button class="tab" data-page="friends"><span aria-hidden="true">🤝</span> Friends</button>
+  <button class="tab" data-page="transactions"><span aria-hidden="true">📋</span> History</button>
 </nav>
 
 <main>
@@ -45,11 +45,11 @@
     </div>
 
     <div class="tiles">
-      <div class="tile"><span class="tile-label">Carried forward</span><span class="tile-value" id="tile-carried">—</span><span class="tile-foot" id="tile-carried-foot"></span></div>
-      <div class="tile"><span class="tile-label">Income</span><span class="tile-value" id="tile-income">—</span></div>
-      <div class="tile"><span class="tile-label">Expense</span><span class="tile-value" id="tile-expense">—</span><span class="tile-foot" id="tile-upcoming"></span></div>
-      <div class="tile"><span class="tile-label">Balance left</span><span class="tile-value" id="tile-balance">—</span><span class="tile-foot" id="tile-balance-foot"></span></div>
-      <div class="tile" id="tile-budget-card" hidden><span class="tile-label" id="tile-budget-label">Budget left</span><span class="tile-value" id="tile-budget">—</span></div>
+      <div class="tile"><span class="tile-label"><span aria-hidden="true">🔄</span> Carried forward</span><span class="tile-value" id="tile-carried">—</span><span class="tile-foot" id="tile-carried-foot"></span></div>
+      <div class="tile"><span class="tile-label"><span aria-hidden="true">💰</span> Income</span><span class="tile-value" id="tile-income">—</span></div>
+      <div class="tile"><span class="tile-label"><span aria-hidden="true">🧾</span> Expense</span><span class="tile-value" id="tile-expense">—</span><span class="tile-foot" id="tile-upcoming"></span></div>
+      <div class="tile"><span class="tile-label"><span aria-hidden="true">🪙</span> Balance left</span><span class="tile-value" id="tile-balance">—</span><span class="tile-foot" id="tile-balance-foot"></span></div>
+      <div class="tile" id="tile-budget-card" hidden><span class="tile-label" id="tile-budget-label"><span aria-hidden="true">🎯</span> Budget left</span><span class="tile-value" id="tile-budget">—</span></div>
     </div>
 
     <div class="meter"><div class="meter-fill" id="budget-meter"></div></div>
@@ -57,28 +57,33 @@
 
     <div class="split">
       <div class="panel">
-        <h3>What you hold now</h3>
+        <h3><span aria-hidden="true">👛</span> What you hold now</h3>
         <ul class="bars" id="account-balances"></ul>
         <p class="muted small" id="lending-line"></p>
       </div>
       <div class="panel">
-        <h3>Income by account</h3>
+        <h3><span aria-hidden="true">💰</span> Income by account</h3>
         <ul class="bars" id="income-split"></ul>
       </div>
       <div class="panel">
-        <h3>Expense by payment method</h3>
+        <h3><span aria-hidden="true">🧾</span> Expense by payment method</h3>
         <ul class="bars" id="expense-split"></ul>
       </div>
     </div>
 
     <div class="panel">
-      <h3>Last 6 months</h3>
+      <h3><span aria-hidden="true">🔍</span> Where it went <span class="pill">tap a row</span></h3>
+      <ul class="bars breakdown" id="category-breakdown"></ul>
+    </div>
+
+    <div class="panel">
+      <h3><span aria-hidden="true">📈</span> Last 6 months <span class="pill">tap a month</span></h3>
       <div class="trend" id="trend"></div>
       <p class="legend"><span class="key key-income"></span>Income <span class="key key-expense"></span>Expense</p>
     </div>
 
     <div class="panel">
-      <h3>Upcoming expenses <span class="pill" id="upcoming-count">0</span></h3>
+      <h3><span aria-hidden="true">📅</span> Upcoming expenses <span class="pill" id="upcoming-count">0</span></h3>
       <div id="upcoming"></div>
     </div>
   </section>
@@ -90,16 +95,20 @@
     <form id="income-form" class="card form">
       <div class="grid">
         <label class="field">Date <input type="date" name="date" required /></label>
-        <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" placeholder="9000" required /></label>
+        <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" placeholder="9000" required />
+          <span class="quick" data-quick="income"></span></label>
       </div>
       <fieldset class="field">
         <legend>Received in</legend>
         <div class="choices" id="income-accounts"></div>
       </fieldset>
       <div class="grid">
-        <label class="field">Category <select name="category" id="income-categories"></select></label>
         <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
       </div>
+      <fieldset class="field">
+        <legend>Category</legend>
+        <div class="chips" id="income-categories"></div>
+      </fieldset>
       <button class="primary" type="submit">Save income</button>
       <p class="form-msg" id="income-msg"></p>
     </form>
@@ -120,16 +129,20 @@
       </fieldset>
       <div class="grid">
         <label class="field">Date <input type="date" name="date" required /></label>
-        <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" placeholder="5000" required /></label>
+        <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" placeholder="5000" required />
+          <span class="quick" data-quick="expense"></span></label>
       </div>
       <fieldset class="field">
         <legend>Paid by</legend>
         <div class="choices" id="expense-methods"></div>
       </fieldset>
       <div class="grid">
-        <label class="field">Category <select name="category" id="expense-categories"></select></label>
         <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
       </div>
+      <fieldset class="field">
+        <legend>Category</legend>
+        <div class="chips" id="expense-categories"></div>
+      </fieldset>
       <button class="primary" type="submit">Save expense</button>
       <p class="form-msg" id="expense-msg"></p>
     </form>
@@ -142,13 +155,13 @@
     <p class="muted">Cash you have lent out. Repayments go back into Cash in Hand or Bank, in full or a bit at a time.</p>
 
     <div class="tiles">
-      <div class="tile"><span class="tile-label">Lent out</span><span class="tile-value" id="tile-lent">—</span></div>
-      <div class="tile"><span class="tile-label">Come back</span><span class="tile-value" id="tile-repaid">—</span></div>
-      <div class="tile"><span class="tile-label">Still with friends</span><span class="tile-value" id="tile-outstanding">—</span></div>
+      <div class="tile"><span class="tile-label"><span aria-hidden="true">🤝</span> Lent out</span><span class="tile-value" id="tile-lent">—</span></div>
+      <div class="tile"><span class="tile-label"><span aria-hidden="true">↩️</span> Come back</span><span class="tile-value" id="tile-repaid">—</span></div>
+      <div class="tile"><span class="tile-label"><span aria-hidden="true">⏳</span> Still with friends</span><span class="tile-value" id="tile-outstanding">—</span></div>
     </div>
 
     <form id="loan-form" class="card form">
-      <h3>Lend money</h3>
+      <h3><span aria-hidden="true">🤝</span> Lend money</h3>
       <div class="grid">
         <label class="field">Friend <input type="text" name="friend" maxlength="60" placeholder="Name" required /></label>
         <label class="field">Date <input type="date" name="date" required /></label>
@@ -166,12 +179,12 @@
     </form>
 
     <div class="panel">
-      <h3>Outstanding <span class="pill" id="loan-count">0</span></h3>
+      <h3><span aria-hidden="true">⏳</span> Outstanding <span class="pill" id="loan-count">0</span></h3>
       <div id="loan-list"></div>
     </div>
 
     <div class="panel">
-      <h3>Settled</h3>
+      <h3><span aria-hidden="true">✅</span> Settled</h3>
       <div id="loan-settled"></div>
     </div>
   </section>
@@ -198,6 +211,8 @@
     <div class="panel"><h3>Expenses</h3><div id="tx-expenses"></div></div>
   </section>
 </main>
+
+<div id="toasts" class="toasts" aria-live="polite"></div>
 
 <dialog id="edit-dialog">
   <form id="edit-form" class="form" method="dialog">

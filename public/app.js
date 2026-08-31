@@ -2,6 +2,34 @@
 
 const DEFAULT_CURRENCY = "AED";
 
+// A symbol for every account, payment method and category the API offers.
+const ICONS = {
+  "Cash in Hand": "💵",
+  Cash: "💵",
+  Bank: "🏦",
+  "Credit Card": "💳",
+  Salary: "💼",
+  Business: "🏢",
+  Freelance: "💻",
+  Interest: "📈",
+  Gift: "🎁",
+  Food: "🍽️",
+  Groceries: "🛒",
+  Rent: "🏠",
+  Bills: "💡",
+  Transport: "🚗",
+  Shopping: "🛍️",
+  Health: "🩺",
+  Education: "🎓",
+  EMI: "📆",
+  Entertainment: "🎬",
+  Other: "📌",
+};
+
+const QUICK_AMOUNTS = [50, 100, 500, 1000];
+
+const icon = (name) => ICONS[name] ?? "•";
+
 const state = {
   today: new Date().toISOString().slice(0, 10),
   currentMonth: "",
@@ -65,6 +93,41 @@ function message(element, text, ok = true) {
   element.className = `form-msg ${ok ? "ok" : "bad"}`;
 }
 
+function toast(text, kind = "ok") {
+  const node = document.createElement("div");
+  node.className = `toast ${kind}`;
+  node.innerHTML = `<span aria-hidden="true">${kind === "bad" ? "⚠️" : "✅"}</span><span>${text}</span>`;
+  $("toasts").append(node);
+  setTimeout(() => {
+    node.classList.add("out");
+    setTimeout(() => node.remove(), 300);
+  }, 3200);
+}
+
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** Numbers count up to their new value, so a change is something you see happen. */
+function setAmount(element, value) {
+  const from = Number(element.dataset.value ?? 0);
+  const to = Number(value) || 0;
+  element.dataset.value = to;
+  element.classList.toggle("negative", to < 0);
+
+  if (reduceMotion || from === to) {
+    element.textContent = money(to);
+    return;
+  }
+
+  const started = performance.now();
+  const step = (now) => {
+    const progress = Math.min(1, (now - started) / 420);
+    const eased = 1 - (1 - progress) ** 3;
+    element.textContent = money(from + (to - from) * eased);
+    if (progress < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 function empty(text) {
   const node = document.createElement("p");
   node.className = "empty";
@@ -99,6 +162,45 @@ function fillChoices(container, values, name, checked) {
   });
 }
 
+/** Category picker: a symbol you tap, rather than a dropdown to hunt through. */
+function fillChips(container, values, name, checked) {
+  container.innerHTML = "";
+  values.forEach((value, index) => {
+    const label = document.createElement("label");
+    label.className = "chip";
+    const isOn = checked ? value === checked : index === 0;
+    label.innerHTML =
+      `<input type="radio" name="${name}" value="${value}"${isOn ? " checked" : ""} />` +
+      `<span><span class="chip-icon" aria-hidden="true">${icon(value)}</span>${value}</span>`;
+    container.append(label);
+  });
+}
+
+/** Tap to add a round number to an amount field instead of typing it. */
+function fillQuick(container, input) {
+  container.innerHTML = "";
+  for (const step of QUICK_AMOUNTS) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "quick-btn";
+    button.textContent = `+${step.toLocaleString("en-US")}`;
+    button.addEventListener("click", () => {
+      input.value = Math.round((Number(input.value) || 0) + step);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    container.append(button);
+  }
+  const clear = document.createElement("button");
+  clear.type = "button";
+  clear.className = "quick-btn clear";
+  clear.textContent = "clear";
+  clear.addEventListener("click", () => {
+    input.value = "";
+    input.focus();
+  });
+  container.append(clear);
+}
+
 function fillSelect(select, values, selected) {
   select.innerHTML = values
     .map((value) => `<option${value === selected ? " selected" : ""}>${value}</option>`)
@@ -123,8 +225,10 @@ function entryTable(rows, kind, { actions = false, onDelete, onEdit } = {}) {
     const tr = document.createElement("tr");
     const due = kind === "expense" && row.date > state.today ? ' <span class="tag due">due</span>' : "";
     tr.innerHTML =
-      `<td>${dayLabel(row.date)}${due}</td><td>${row[source]}</td>` +
-      `<td><span class="tag">${row.category}</span></td><td>${row.note || ""}</td>` +
+      `<td>${dayLabel(row.date)}${due}</td>` +
+      `<td><span aria-hidden="true">${icon(row[source])}</span> ${row[source]}</td>` +
+      `<td><span class="tag"><span aria-hidden="true">${icon(row.category)}</span> ${row.category}</span></td>` +
+      `<td>${row.note || ""}</td>` +
       `<td class="amount">${money(row.amount)}</td>`;
     if (actions) {
       const cell = document.createElement("td");
@@ -158,7 +262,8 @@ function splitBars(container, totals, keys, kind) {
     const value = totals[key] || 0;
     const li = document.createElement("li");
     li.innerHTML =
-      `<span class="bar-name">${key}</span><span class="bar-value">${money(value)}</span>` +
+      `<span class="bar-name"><span aria-hidden="true">${icon(key)}</span> ${key}</span>` +
+      `<span class="bar-value">${money(value)}</span>` +
       `<span class="bar-track"><span class="bar-fill ${value < 0 ? "expense" : kind}" ` +
       `style="width:${(Math.abs(value) / max) * 100}%"></span></span>`;
     container.append(li);
@@ -173,14 +278,14 @@ const FIELD_SETS = {
     { type: "date", name: "date", label: "Date", value: row.date },
     { type: "number", name: "amount", label: "Amount", value: row.amount },
     { type: "radio", name: "account", label: "Received in", values: state.options.incomeAccounts, value: row.account },
-    { type: "select", name: "category", label: "Category", values: state.options.incomeCategories, value: row.category },
+    { type: "chips", name: "category", label: "Category", values: state.options.incomeCategories, value: row.category },
     { type: "text", name: "note", label: "Note", value: row.note },
   ],
   expense: (row) => [
     { type: "date", name: "date", label: "Date", value: row.date },
     { type: "number", name: "amount", label: "Amount", value: row.amount },
     { type: "radio", name: "method", label: "Paid by", values: state.options.expenseMethods, value: row.method },
-    { type: "select", name: "category", label: "Category", values: state.options.expenseCategories, value: row.category },
+    { type: "chips", name: "category", label: "Category", values: state.options.expenseCategories, value: row.category },
     { type: "text", name: "note", label: "Note", value: row.note },
   ],
   loan: (row) => [
@@ -208,6 +313,15 @@ function openEdit({ title, kind, row, onSave }) {
   fields.innerHTML = "";
 
   for (const field of FIELD_SETS[kind](row)) {
+    if (field.type === "chips") {
+      const set = document.createElement("fieldset");
+      set.className = "field";
+      set.innerHTML = `<legend>${field.label}</legend><div class="chips"></div>`;
+      fillChips(set.querySelector(".chips"), field.values, field.name, field.value);
+      fields.append(set);
+      continue;
+    }
+
     if (field.type === "radio") {
       const set = document.createElement("fieldset");
       set.className = "field";
@@ -272,27 +386,26 @@ async function loadDashboard(month) {
   const s = data.summary;
   const card = $("status-card");
   card.className = `status-card ${s.isOverBudget ? "bad" : "ok"}`;
-  card.querySelector(".status-headline").textContent =
+  card.querySelector(".status-headline").innerHTML =
+    `<span aria-hidden="true">${s.isOverBudget ? "⚠️" : s.hasEntries ? "✅" : "🗓️"}</span> ` +
     `${s.label} · Income ${money(s.incomeTotal)} · Expense ${money(s.expenseTotal)} · ${s.status}`;
   card.querySelector(".status-detail").textContent =
     `${s.statusMessage} · budget ${money(s.budget)} (${s.budgetIsCustom ? "custom" : "carried forward + this month's income"}) · ${Math.round(s.budgetUsedPct)}% used`;
 
-  $("tile-carried").textContent = money(s.carriedForward);
+  setAmount($("tile-carried"), s.carriedForward);
   $("tile-carried-foot").textContent = `left over from ${previousMonthLabel(month)}`;
-  $("tile-income").textContent = money(s.incomeTotal);
-  $("tile-expense").textContent = money(s.expenseTotal);
+  setAmount($("tile-income"), s.incomeTotal);
+  setAmount($("tile-expense"), s.expenseTotal);
   $("tile-upcoming").textContent = s.expenseUpcoming ? `${money(s.expenseUpcoming)} still due` : "";
 
-  const balance = $("tile-balance");
-  balance.textContent = money(s.balance);
-  balance.classList.toggle("negative", s.balance < 0);
+  setAmount($("tile-balance"), s.balance);
   $("tile-balance-foot").textContent =
     `${money(s.carriedForward)} + ${money(s.incomeTotal)} − ${money(s.expenseTotal)}, opens ${nextMonthLabel(month)}`;
 
   // Without a custom budget this tile would just repeat the balance.
   $("tile-budget-card").hidden = !s.budgetIsCustom;
   $("tile-budget-label").textContent = s.isOverBudget ? "Over budget by" : "Budget left";
-  $("tile-budget").textContent = money(s.isOverBudget ? s.overBy : s.remaining);
+  setAmount($("tile-budget"), s.isOverBudget ? s.overBy : s.remaining);
 
   const meter = $("budget-meter");
   meter.style.width = `${Math.min(100, s.budgetUsedPct)}%`;
@@ -316,6 +429,7 @@ async function loadDashboard(month) {
   splitBars($("income-split"), s.incomeByAccount, state.options.incomeAccounts, "income");
   splitBars($("expense-split"), s.expenseByMethod, state.options.expenseMethods, "expense");
 
+  drawBreakdown(data.categories.expense, data.expenses, s.expenseTotal);
   drawTrend(data.trend);
 
   $("upcoming-count").textContent = data.upcoming.length;
@@ -324,18 +438,62 @@ async function loadDashboard(month) {
   );
 }
 
+/** Spending by category. Tap a row to see the entries behind the number. */
+function drawBreakdown(categories, entries, total) {
+  const list = $("category-breakdown");
+  list.innerHTML = "";
+  if (!categories.length) {
+    list.append(empty("Nothing spent this month yet."));
+    return;
+  }
+
+  for (const row of categories) {
+    const share = total > 0 ? (row.total / total) * 100 : 0;
+    const item = document.createElement("li");
+    item.className = "breakdown-row";
+    item.innerHTML =
+      `<button type="button" class="bar-name breakdown-toggle">` +
+      `<span aria-hidden="true">${icon(row.category)}</span> ${row.category}` +
+      `<span class="chev" aria-hidden="true">▸</span></button>` +
+      `<span class="bar-value">${money(row.total)} <span class="muted small">${Math.round(share)}%</span></span>` +
+      `<span class="bar-track"><span class="bar-fill expense" style="width:${share}%"></span></span>`;
+
+    const detail = document.createElement("div");
+    detail.className = "breakdown-detail";
+    detail.hidden = true;
+    detail.append(entryTable(entries.filter((entry) => entry.category === row.category), "expense"));
+    item.append(detail);
+
+    item.querySelector(".breakdown-toggle").addEventListener("click", () => {
+      detail.hidden = !detail.hidden;
+      item.classList.toggle("open", !detail.hidden);
+    });
+    list.append(item);
+  }
+}
+
 function drawTrend(trend) {
   const max = Math.max(1, ...trend.flatMap((row) => [row.income, row.expense]));
   const container = $("trend");
   container.innerHTML = "";
   for (const row of trend) {
-    const cell = document.createElement("div");
-    cell.className = "trend-month";
+    const cell = document.createElement("button");
+    cell.type = "button";
+    cell.className = `trend-month${row.month === state.dashMonth ? " is-current" : ""}`;
     cell.innerHTML =
       `<div class="trend-pair">` +
       `<div class="trend-bar income" style="height:${(row.income / max) * 100}%" title="Income ${money(row.income)}"></div>` +
       `<div class="trend-bar expense" style="height:${(row.expense / max) * 100}%" title="Expense ${money(row.expense)}"></div>` +
       `</div><span class="trend-label">${row.label}</span>`;
+    // Tap a month to jump the whole dashboard to it.
+    cell.addEventListener("click", () => {
+      if (state.months.includes(row.month)) {
+        $("dash-month").value = row.month;
+        loadDashboard(row.month);
+      } else {
+        toast(`Nothing recorded in ${row.label} yet.`, "bad");
+      }
+    });
     container.append(cell);
   }
 }
@@ -345,9 +503,9 @@ function drawTrend(trend) {
 // -------------------------------------------------------------------
 async function loadFriends() {
   const data = await api("/loans");
-  $("tile-lent").textContent = money(data.totals.lent);
-  $("tile-repaid").textContent = money(data.totals.repaid);
-  $("tile-outstanding").textContent = money(data.totals.outstanding);
+  setAmount($("tile-lent"), data.totals.lent);
+  setAmount($("tile-repaid"), data.totals.repaid);
+  setAmount($("tile-outstanding"), data.totals.outstanding);
 
   const open = data.loans.filter((loan) => loan.outstanding > 0);
   const settled = data.loans.filter((loan) => loan.outstanding <= 0);
@@ -403,12 +561,14 @@ function loanCard(loan) {
             row,
             onSave: async (body) => {
               await api(`/repayments/${row.id}`, { method: "PATCH", body: JSON.stringify(body) });
+              toast("Repayment updated.");
               await refreshAll();
             },
           }),
         ),
         linkButton("Delete", async () => {
           await api(`/repayments/${row.id}`, { method: "DELETE" });
+          toast("Repayment removed.");
           await refreshAll();
         }, "danger"),
       );
@@ -430,12 +590,14 @@ function loanCard(loan) {
         row: loan,
         onSave: async (body) => {
           await api(`/loans/${loan.id}`, { method: "PATCH", body: JSON.stringify(body) });
+          toast("Loan updated.");
           await refreshAll();
         },
       }),
     ),
     linkButton("Delete loan", async () => {
       await api(`/loans/${loan.id}`, { method: "DELETE" });
+      toast(`Loan to ${loan.friend} deleted.`);
       await refreshAll();
     }, "danger"),
   );
@@ -466,6 +628,7 @@ function repaymentForm(loan) {
     };
     try {
       await api(`/loans/${loan.id}/repayments`, { method: "POST", body: JSON.stringify(body) });
+      toast(`${icon(body.receivedIn)} ${money(amount)} back from ${loan.friend} into ${body.receivedIn}.`);
       await refreshAll();
     } catch (error) {
       message(form.querySelector(".form-msg"), error.message, false);
@@ -506,6 +669,7 @@ async function loadTransactions(month) {
         actions: true,
         onDelete: async (id) => {
           await api(`/${kind}/${id}`, { method: "DELETE" });
+          toast(`Deleted that ${kind === "income" ? "income" : "expense"} entry.`);
           await refreshAll();
         },
         onEdit: (row) =>
@@ -514,7 +678,8 @@ async function loadTransactions(month) {
             kind,
             row,
             onSave: async (body) => {
-              await api(`/${kind}/${row.id}`, { method: "PATCH", body: JSON.stringify(body) });
+              const saved = await api(`/${kind}/${row.id}`, { method: "PATCH", body: JSON.stringify(body) });
+              toast(`${icon(saved.entry.account ?? saved.entry.method)} Updated to ${money(saved.entry.amount)}.`);
               await refreshAll();
             },
           }),
@@ -551,12 +716,14 @@ function bindIncomeForm() {
       date: form.date.value,
       amount: form.amount.value,
       account: form.querySelector('input[name="account"]:checked')?.value,
-      category: form.category.value,
+      category: form.querySelector('input[name="category"]:checked')?.value,
       note: form.note.value,
     };
     try {
       const result = await api("/income", { method: "POST", body: JSON.stringify(body) });
-      message($("income-msg"), `Saved ${money(result.entry.amount)} into ${result.entry.account} on ${dayLabel(result.entry.date)}.`);
+      const text = `${icon(result.entry.account)} Saved ${money(result.entry.amount)} into ${result.entry.account} on ${dayLabel(result.entry.date)}.`;
+      message($("income-msg"), text);
+      toast(text);
       form.reset();
       form.date.value = state.today;
       await refreshAll();
@@ -590,17 +757,15 @@ function bindExpenseForm() {
       date: form.date.value,
       amount: form.amount.value,
       method: form.querySelector('input[name="method"]:checked')?.value,
-      category: form.category.value,
+      category: form.querySelector('input[name="category"]:checked')?.value,
       note: form.note.value,
     };
     try {
       const result = await api("/expense", { method: "POST", body: JSON.stringify(body) });
       const s = result.summary;
-      message(
-        $("expense-msg"),
-        `Saved ${money(result.entry.amount)} by ${result.entry.method} on ${dayLabel(result.entry.date)}. ${s.label}: ${s.status} — ${s.statusMessage}.`,
-        !s.isOverBudget,
-      );
+      const text = `${icon(result.entry.method)} Saved ${money(result.entry.amount)} by ${result.entry.method} on ${dayLabel(result.entry.date)}.`;
+      message($("expense-msg"), `${text} ${s.label}: ${s.status} — ${s.statusMessage}.`, !s.isOverBudget);
+      toast(`${text} ${s.statusMessage}.`, s.isOverBudget ? "bad" : "ok");
       form.amount.value = "";
       form.note.value = "";
       await refreshAll();
@@ -624,7 +789,9 @@ function bindLoanForm() {
     };
     try {
       const result = await api("/loans", { method: "POST", body: JSON.stringify(body) });
-      message($("loan-msg"), `Lent ${money(result.loan.amount)} to ${result.loan.friend} from ${result.loan.paidFrom}.`);
+      const text = `🤝 Lent ${money(result.loan.amount)} to ${result.loan.friend} from ${result.loan.paidFrom}.`;
+      message($("loan-msg"), text);
+      toast(text);
       form.reset();
       form.date.value = state.today;
       await refreshAll();
@@ -703,8 +870,10 @@ async function boot() {
   fillChoices($("income-accounts"), state.options.incomeAccounts, "account");
   fillChoices($("expense-methods"), state.options.expenseMethods, "method");
   fillChoices($("loan-sources"), state.options.loanSources, "paidFrom");
-  fillSelect($("income-categories"), state.options.incomeCategories);
-  fillSelect($("expense-categories"), state.options.expenseCategories);
+  fillChips($("income-categories"), state.options.incomeCategories, "category");
+  fillChips($("expense-categories"), state.options.expenseCategories, "category");
+  fillQuick(document.querySelector('[data-quick="income"]'), $("income-form").amount);
+  fillQuick(document.querySelector('[data-quick="expense"]'), $("expense-form").amount);
 
   bindTabs();
   bindCurrency();
