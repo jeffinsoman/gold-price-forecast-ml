@@ -7,8 +7,10 @@ import {
   EXPENSE_METHODS,
   INCOME_ACCOUNTS,
   INCOME_CATEGORIES,
+  LOAN_DIRECTIONS,
   LOAN_SOURCES,
   accountForMethod,
+  loanFlow,
   loanStatus,
   monthKey,
   monthLabel,
@@ -62,16 +64,39 @@ function totalsFrom(rows, key, field = "total") {
 // -------------------------------------------------------------------
 // MONTH QUERIES
 // -------------------------------------------------------------------
-/** Everything earlier months left behind: income minus expense, all time before `month`. */
+// Money that came in / went out through loans, for one month or for everything
+// before it. Lending it out is money you no longer hold; a repayment brings it
+// back. Borrowing is the mirror.
+const LOAN_IN = (op) =>
+  `COALESCE((SELECT SUM(amount) FROM loan WHERE month ${op} ?1 AND direction = 'borrowed'), 0)` +
+  ` + COALESCE((SELECT SUM(r.amount) FROM loan_repayment r JOIN loan l ON l.id = r.loan_id` +
+  ` WHERE r.month ${op} ?1 AND l.direction = 'lent'), 0)`;
+
+const LOAN_OUT = (op) =>
+  `COALESCE((SELECT SUM(amount) FROM loan WHERE month ${op} ?1 AND direction = 'lent'), 0)` +
+  ` + COALESCE((SELECT SUM(r.amount) FROM loan_repayment r JOIN loan l ON l.id = r.loan_id` +
+  ` WHERE r.month ${op} ?1 AND l.direction = 'borrowed'), 0)`;
+
+/** What every earlier month left behind, loans included. */
 async function carriedForward(db, month) {
   const row = await db
     .prepare(
       "SELECT COALESCE((SELECT SUM(amount) FROM income WHERE month < ?1), 0)" +
-        " - COALESCE((SELECT SUM(amount) FROM expense WHERE month < ?1), 0) AS carried",
+        " - COALESCE((SELECT SUM(amount) FROM expense WHERE month < ?1), 0)" +
+        ` + (${LOAN_IN("<")}) - (${LOAN_OUT("<")}) AS carried`,
     )
     .bind(month)
     .first();
   return Number(row?.carried) || 0;
+}
+
+/** The loan money moving in and out during one month. */
+async function loanFlows(db, month) {
+  const row = await db
+    .prepare(`SELECT (${LOAN_IN("=")}) AS moved_in, (${LOAN_OUT("=")}) AS moved_out`)
+    .bind(month)
+    .first();
+  return { loanIn: Number(row?.moved_in) || 0, loanOut: Number(row?.moved_out) || 0 };
 }
 
 async function monthSummary(db, month) {
@@ -100,6 +125,7 @@ async function monthSummary(db, month) {
     expenseUpcoming: Number(totals.upcoming),
     customBudget: custom ? Number(custom.amount) : null,
     carriedForward: await carriedForward(db, month),
+    ...(await loanFlows(db, month)),
   });
 }
 
@@ -111,37 +137,45 @@ async function accountBalances(db, month) {
   const [income, expense, loans, repaid] = await db.batch([
     db.prepare("SELECT account, SUM(amount) AS total FROM income WHERE month <= ?1 GROUP BY account").bind(month),
     db.prepare("SELECT method, SUM(amount) AS total FROM expense WHERE month <= ?1 GROUP BY method").bind(month),
-    db.prepare("SELECT paid_from, SUM(amount) AS total FROM loan WHERE month <= ?1 GROUP BY paid_from").bind(month),
     db
-      .prepare("SELECT received_in, SUM(amount) AS total FROM loan_repayment WHERE month <= ?1 GROUP BY received_in")
+      .prepare("SELECT direction, paid_from, SUM(amount) AS total FROM loan WHERE month <= ?1 GROUP BY direction, paid_from")
+      .bind(month),
+    db
+      .prepare(
+        "SELECT l.direction, r.received_in, SUM(r.amount) AS total FROM loan_repayment r" +
+          " JOIN loan l ON l.id = r.loan_id WHERE r.month <= ?1 GROUP BY l.direction, r.received_in",
+      )
       .bind(month),
   ]);
 
   const inBy = totalsFrom(income.results, "account");
   const outBy = totalsFrom(expense.results, "method");
-  const lentBy = totalsFrom(loans.results, "paid_from");
-  const backBy = totalsFrom(repaid.results, "received_in");
 
   const balances = {};
   for (const account of ACCOUNTS) balances[account] = inBy[account] ?? 0;
+  let cardSpend = outBy["Credit Card"] ?? 0;
 
-  // Spending and lending draw the account down; Credit Card is not an account.
-  for (const source of [outBy, lentBy]) {
-    for (const [method, total] of Object.entries(source)) {
-      const account = accountForMethod(method);
-      if (account) balances[account] -= total;
-    }
+  // Spending draws an account down; Credit Card is a bill, not an account.
+  for (const [method, total] of Object.entries(outBy)) {
+    const account = accountForMethod(method);
+    if (account) balances[account] -= total;
   }
 
-  // Repayments land straight back in an account.
-  for (const [account, total] of Object.entries(backBy)) {
-    if (account in balances) balances[account] += total;
-  }
-
-  return {
-    balances,
-    cardSpend: (outBy["Credit Card"] ?? 0) + (lentBy["Credit Card"] ?? 0),
+  const move = (name, total, outwards) => {
+    // Lending and repaying a debt take money out; borrowing and being repaid bring it in.
+    const account = ACCOUNTS.includes(name) ? name : accountForMethod(name);
+    if (account) balances[account] += outwards ? -total : total;
+    else if (name === "Credit Card" && outwards) cardSpend += total;
   };
+
+  for (const row of loans.results) {
+    move(row.paid_from, Number(row.total), row.direction !== "borrowed");
+  }
+  for (const row of repaid.results) {
+    move(row.received_in, Number(row.total), row.direction === "borrowed");
+  }
+
+  return { balances, cardSpend };
 }
 
 async function monthTrend(db, month) {
@@ -217,24 +251,41 @@ async function listLoans(db) {
   const rows = loans.results.map((loan) => {
     const paid = byLoan[loan.id] ?? [];
     const repaid = paid.reduce((total, row) => total + Number(row.amount), 0);
-    return { ...loan, ...loanStatus(loan.amount, repaid), repayments: paid };
+    const direction = loan.direction ?? "lent";
+    return { ...loan, direction, ...loanStatus(loan.amount, repaid, direction), repayments: paid };
   });
 
-  const totals = rows.reduce(
-    (acc, row) => ({
-      lent: acc.lent + row.lent,
-      repaid: acc.repaid + row.repaid,
-      outstanding: acc.outstanding + row.outstanding,
-    }),
-    { lent: 0, repaid: 0, outstanding: 0 },
-  );
+  const tally = (list) =>
+    list.reduce(
+      (acc, row) => ({
+        total: acc.total + row.lent,
+        settled: acc.settled + row.repaid,
+        outstanding: acc.outstanding + row.outstanding,
+        open: acc.open + (row.outstanding > 0 ? 1 : 0),
+      }),
+      { total: 0, settled: 0, outstanding: 0, open: 0 },
+    );
 
-  return { loans: rows, totals, friends: [...new Set(rows.map((row) => row.friend))].sort() };
+  const lent = rows.filter((row) => row.direction === "lent");
+  const borrowed = rows.filter((row) => row.direction === "borrowed");
+
+  return {
+    loans: rows,
+    lent,
+    borrowed,
+    totals: {
+      lent: tally(lent),
+      borrowed: tally(borrowed),
+      // What the two sides come to: positive means friends owe you overall.
+      net: tally(lent).outstanding - tally(borrowed).outstanding,
+    },
+    friends: [...new Set(rows.map((row) => row.friend))].sort(),
+  };
 }
 
 /** What is still owed on a loan, optionally ignoring one repayment being edited. */
 async function outstandingFor(db, loanId, ignoreRepaymentId = null) {
-  const loan = await db.prepare("SELECT amount FROM loan WHERE id = ?1").bind(loanId).first();
+  const loan = await db.prepare("SELECT amount, direction FROM loan WHERE id = ?1").bind(loanId).first();
   if (!loan) return null;
   const row = await db
     .prepare(
@@ -242,7 +293,8 @@ async function outstandingFor(db, loanId, ignoreRepaymentId = null) {
     )
     .bind(loanId, ignoreRepaymentId)
     .first();
-  return loanStatus(loan.amount, Number(row?.repaid) || 0).outstanding;
+  const direction = loan.direction ?? "lent";
+  return { ...loanStatus(loan.amount, Number(row?.repaid) || 0, direction), direction };
 }
 
 // -------------------------------------------------------------------
@@ -268,6 +320,8 @@ async function handleApi(request, env, url) {
         expenseCategories: EXPENSE_CATEGORIES,
         loanSources: LOAN_SOURCES,
         accounts: ACCOUNTS,
+        loanDirections: LOAN_DIRECTIONS,
+        loanFlow: Object.fromEntries(LOAN_DIRECTIONS.map((d) => [d, loanFlow(d)])),
       },
     });
   }
@@ -292,7 +346,7 @@ async function handleApi(request, env, url) {
       upcoming,
       categories,
       accounts,
-      lending: { totals: lending.totals, open: lending.loans.filter((row) => row.outstanding > 0).length },
+      lending: lending.totals,
       months: await availableMonths(db),
     });
   }
@@ -362,8 +416,10 @@ async function handleApi(request, env, url) {
   if (method === "POST" && path === "loans") {
     const row = validateLoan(await readJson(request));
     const result = await db
-      .prepare("INSERT INTO loan (friend, date, month, amount, paid_from, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
-      .bind(row.friend, row.date, row.month, row.amount, row.paidFrom, row.note)
+      .prepare(
+        "INSERT INTO loan (friend, date, month, amount, paid_from, note, direction) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+      )
+      .bind(row.friend, row.date, row.month, row.amount, row.paidFrom, row.note, row.direction)
       .run();
     return json({ id: result.meta.last_row_id, loan: row, ...(await listLoans(db)) }, 201);
   }
@@ -380,8 +436,10 @@ async function handleApi(request, env, url) {
       return fail(`Already repaid ${Number(repaid.repaid).toLocaleString("en-US")}. The loan cannot be less than that.`);
     }
     const result = await db
-      .prepare("UPDATE loan SET friend = ?1, date = ?2, month = ?3, amount = ?4, paid_from = ?5, note = ?6 WHERE id = ?7")
-      .bind(row.friend, row.date, row.month, row.amount, row.paidFrom, row.note, id)
+      .prepare(
+        "UPDATE loan SET friend = ?1, date = ?2, month = ?3, amount = ?4, paid_from = ?5, note = ?6, direction = ?7 WHERE id = ?8",
+      )
+      .bind(row.friend, row.date, row.month, row.amount, row.paidFrom, row.note, row.direction, id)
       .run();
     if (!result.meta.changes) return fail("That loan no longer exists.", 404);
     return json({ id, loan: row, ...(await listLoans(db)) });
@@ -399,11 +457,11 @@ async function handleApi(request, env, url) {
   const repayAdd = path.match(/^loans\/(\d+)\/repayments$/);
   if (method === "POST" && repayAdd) {
     const loanId = Number(repayAdd[1]);
-    const outstanding = await outstandingFor(db, loanId);
-    if (outstanding === null) return fail("That loan no longer exists.", 404);
-    if (outstanding <= 0) return fail("That loan is already settled.");
+    const open = await outstandingFor(db, loanId);
+    if (open === null) return fail("That loan no longer exists.", 404);
+    if (open.outstanding <= 0) return fail("That loan is already settled.");
 
-    const row = validateRepayment(await readJson(request), outstanding);
+    const row = validateRepayment(await readJson(request), open.outstanding, open.direction);
     const result = await db
       .prepare(
         "INSERT INTO loan_repayment (loan_id, date, month, amount, received_in, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -425,8 +483,8 @@ async function handleApi(request, env, url) {
     }
 
     // Editing: measure the outstanding balance without this repayment in it.
-    const outstanding = await outstandingFor(db, existing.loan_id, id);
-    const row = validateRepayment(await readJson(request), outstanding);
+    const open = await outstandingFor(db, existing.loan_id, id);
+    const row = validateRepayment(await readJson(request), open.outstanding, open.direction);
     await db
       .prepare("UPDATE loan_repayment SET date = ?1, month = ?2, amount = ?3, received_in = ?4, note = ?5 WHERE id = ?6")
       .bind(row.date, row.month, row.amount, row.receivedIn, row.note, id)

@@ -117,9 +117,13 @@ Every month opens with what the previous one left over, and the balance is that 
 takings less its spending:
 
 ```
-carried forward + income - expense = balance left   →   opens the next month
-        659     +  8,947 -   7,810 =     1,796
+carried forward + money in - money out = balance left   →   opens the next month
+        659     +   8,947  -    7,810  =     1,796
 ```
+
+Money in is income plus anything borrowed or repaid to you; money out is spending plus anything you
+lend or pay back. Lend 500 in August and the balance drops by 500 that month — the cash is not with
+you — and it only reappears when the friend pays it back.
 
 That balance is also what the month is measured against: with no custom budget the limit is
 `carried forward + income`, so the card reads IN CONTROL while the balance is positive and OUT OF
@@ -140,15 +144,22 @@ the month it falls in and shown as *upcoming* until its date arrives. Paid by:
 * **Credit Card**
 
 ### Money with friends
-Lend cash out and track what comes back. Each loan records the friend, the date, the amount and the
-account it came from. Repayments are separate rows, so a friend can pay back in instalments: each one
-carries its own date and lands in **Cash in Hand** or **Bank**, and the loan reads *Not repaid*,
-*Partly repaid* or *Settled* as the balance moves. A repayment can never exceed what is outstanding,
-and a loan cannot be edited below what has already come back.
+Both directions, on one page:
 
-Lending is not an expense, so it never touches the month's verdict — but it does move real money, so
-the dashboard's **What you hold now** panel nets it out: income, minus spending, minus what is lent,
-plus what has been repaid, per account.
+* **🤝 I lent money** — it leaves an account (Cash, Bank or Credit Card) and comes back into
+  **Cash in Hand** or **Bank**.
+* **🙏 I borrowed money** — it arrives in **Cash in Hand** or **Bank** and is paid back out of Cash,
+  Bank or Credit Card.
+
+The form retitles itself as you switch, and offers only the accounts that make sense for that
+direction. Repayments are separate dated rows either way, so anything can be settled in instalments,
+and each loan reads *Not repaid* / *Partly repaid* / *Settled* (or *Not paid back* / *Partly paid
+back* when you are the borrower). A repayment can never exceed what is outstanding, and a loan cannot
+be edited below what has already moved.
+
+Three tiles keep the score: **they owe you**, **you owe**, and the **net position** between them.
+Both sides feed the account balances in **What you hold now**, and both move the month's balance:
+lending and paying back a debt count as money out, borrowing and being repaid count as money in.
 
 ### Using it
 Every account, payment method and category carries a symbol, and the pages are built to be tapped

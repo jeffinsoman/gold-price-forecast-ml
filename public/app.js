@@ -28,6 +28,13 @@ const ICONS = {
 
 const QUICK_AMOUNTS = [50, 100, 500, 1000];
 
+const DIRECTION = {
+  lent: { icon: "🤝", who: "Lent to", verb: "Lent", owes: "outstanding", back: "back", save: "Save loan" },
+  borrowed: { icon: "🙏", who: "Borrowed from", verb: "Borrowed", owes: "to repay", back: "paid back", save: "Save what you took" },
+};
+
+const flowFor = (direction) => state.options.loanFlow[direction] ?? state.options.loanFlow.lent;
+
 const icon = (name) => ICONS[name] ?? "•";
 
 const state = {
@@ -289,16 +296,28 @@ const FIELD_SETS = {
     { type: "text", name: "note", label: "Note", value: row.note },
   ],
   loan: (row) => [
-    { type: "text", name: "friend", label: "Friend", value: row.friend },
+    { type: "text", name: "friend", label: DIRECTION[row.direction ?? "lent"].who, value: row.friend },
     { type: "date", name: "date", label: "Date", value: row.date },
     { type: "number", name: "amount", label: "Amount", value: row.amount },
-    { type: "radio", name: "paidFrom", label: "Paid from", values: state.options.loanSources, value: row.paid_from },
+    {
+      type: "radio",
+      name: "paidFrom",
+      label: flowFor(row.direction).openLabel,
+      values: flowFor(row.direction).openValues,
+      value: row.paid_from,
+    },
     { type: "text", name: "note", label: "Note", value: row.note },
   ],
   repayment: (row) => [
-    { type: "date", name: "date", label: "Date received", value: row.date },
+    { type: "date", name: "date", label: "Date", value: row.date },
     { type: "number", name: "amount", label: "Amount", value: row.amount },
-    { type: "radio", name: "receivedIn", label: "Received in", values: state.options.accounts, value: row.received_in },
+    {
+      type: "radio",
+      name: "receivedIn",
+      label: flowFor(row.direction).backLabel,
+      values: flowFor(row.direction).backValues,
+      value: row.received_in,
+    },
     { type: "text", name: "note", label: "Note", value: row.note },
   ],
 };
@@ -399,8 +418,11 @@ async function loadDashboard(month) {
   $("tile-upcoming").textContent = s.expenseUpcoming ? `${money(s.expenseUpcoming)} still due` : "";
 
   setAmount($("tile-balance"), s.balance);
-  $("tile-balance-foot").textContent =
-    `${money(s.carriedForward)} + ${money(s.incomeTotal)} − ${money(s.expenseTotal)}, opens ${nextMonthLabel(month)}`;
+  const sum = [`${money(s.carriedForward)}`, `+ ${money(s.incomeTotal)}`];
+  if (s.loanIn) sum.push(`+ ${money(s.loanIn)} in`);
+  sum.push(`− ${money(s.expenseTotal)}`);
+  if (s.loanOut) sum.push(`− ${money(s.loanOut)} lent out`);
+  $("tile-balance-foot").textContent = `${sum.join(" ")}, opens ${nextMonthLabel(month)}`;
 
   // Without a custom budget this tile would just repeat the balance.
   $("tile-budget-card").hidden = !s.budgetIsCustom;
@@ -411,20 +433,19 @@ async function loadDashboard(month) {
   meter.style.width = `${Math.min(100, s.budgetUsedPct)}%`;
   meter.classList.toggle("over", s.isOverBudget);
   $("budget-note").textContent = s.hasEntries
-    ? `${money(s.available)} available this month, ${money(s.expensePaid)} spent so far, ${money(s.expenseUpcoming)} still to come.`
+    ? `${money(s.available)} available this month, ${money(s.spent)} out so far${s.loanOut ? ` (${money(s.loanOut)} of it lent or paid back)` : ""}, ${money(s.expenseUpcoming)} still to come.`
     : `${money(s.carriedForward)} carried in. Add income and expenses to see this month take shape.`;
 
   // What you actually hold, plus what is out with friends.
   splitBars($("account-balances"), data.accounts.balances, state.options.accounts, "income");
-  const lending = data.lending.totals;
+  const { lent, borrowed } = data.lending;
   const parts = [];
   if (data.accounts.cardSpend) parts.push(`${money(data.accounts.cardSpend)} on the credit card`);
-  parts.push(
-    lending.outstanding
-      ? `${money(lending.outstanding)} still with friends across ${data.lending.open} loan${data.lending.open === 1 ? "" : "s"}`
-      : "nothing out with friends",
-  );
-  $("lending-line").textContent = `Plus ${parts.join(", ")}.`;
+  if (lent.outstanding) parts.push(`🤝 ${money(lent.outstanding)} still with friends`);
+  if (borrowed.outstanding) parts.push(`🙏 ${money(borrowed.outstanding)} you owe`);
+  $("lending-line").textContent = parts.length
+    ? `Plus ${parts.join(", ")}.`
+    : "Nothing on the card, nothing owed either way.";
 
   splitBars($("income-split"), s.incomeByAccount, state.options.incomeAccounts, "income");
   splitBars($("expense-split"), s.expenseByMethod, state.options.expenseMethods, "expense");
@@ -503,16 +524,28 @@ function drawTrend(trend) {
 // -------------------------------------------------------------------
 async function loadFriends() {
   const data = await api("/loans");
-  setAmount($("tile-lent"), data.totals.lent);
-  setAmount($("tile-repaid"), data.totals.repaid);
-  setAmount($("tile-outstanding"), data.totals.outstanding);
+  const { lent, borrowed, net } = data.totals;
 
-  const open = data.loans.filter((loan) => loan.outstanding > 0);
+  setAmount($("tile-owed-you"), lent.outstanding);
+  $("tile-owed-you-foot").textContent = `${money(lent.total)} lent, ${money(lent.settled)} back`;
+  setAmount($("tile-you-owe"), borrowed.outstanding);
+  $("tile-you-owe-foot").textContent = `${money(borrowed.total)} taken, ${money(borrowed.settled)} paid back`;
+  setAmount($("tile-net"), Math.abs(net));
+  $("tile-net-foot").textContent = net > 0 ? "owed to you overall" : net < 0 ? "you owe overall" : "all square";
+
+  const open = (rows) => rows.filter((loan) => loan.outstanding > 0);
+  const openLent = open(data.lent);
+  const openBorrowed = open(data.borrowed);
   const settled = data.loans.filter((loan) => loan.outstanding <= 0);
-  $("loan-count").textContent = open.length;
 
-  $("loan-list").replaceChildren(
-    ...(open.length ? open.map(loanCard) : [empty("Nobody owes you anything right now.")]),
+  $("loan-count-lent").textContent = openLent.length;
+  $("loan-count-borrowed").textContent = openBorrowed.length;
+
+  $("loan-list-lent").replaceChildren(
+    ...(openLent.length ? openLent.map(loanCard) : [empty("Nobody owes you anything right now.")]),
+  );
+  $("loan-list-borrowed").replaceChildren(
+    ...(openBorrowed.length ? openBorrowed.map(loanCard) : [empty("You do not owe anyone right now.")]),
   );
   $("loan-settled").replaceChildren(
     ...(settled.length ? settled.map(loanCard) : [empty("Settled loans will move here.")]),
@@ -520,17 +553,20 @@ async function loadFriends() {
 }
 
 function loanCard(loan) {
+  const style = DIRECTION[loan.direction] ?? DIRECTION.lent;
+  const flow = flowFor(loan.direction);
   const card = document.createElement("div");
-  card.className = `loan ${loan.outstanding <= 0 ? "settled" : ""}`;
+  card.className = `loan ${loan.direction} ${loan.outstanding <= 0 ? "settled" : ""}`;
 
   const head = document.createElement("div");
   head.className = "loan-head";
   head.innerHTML =
-    `<div><span class="loan-name">${loan.friend}</span>` +
+    `<div><span class="loan-name"><span aria-hidden="true">${style.icon}</span> ${loan.friend}</span>` +
     `<span class="tag ${loan.outstanding <= 0 ? "" : "due"}">${loan.status}</span>` +
-    `<p class="muted small">${money(loan.lent)} on ${dayLabel(loan.date)} from ${loan.paid_from}` +
+    `<p class="muted small">${style.verb} ${money(loan.lent)} on ${dayLabel(loan.date)} · ` +
+    `${flow.openLabel.toLowerCase()} ${icon(loan.paid_from)} ${loan.paid_from}` +
     `${loan.note ? ` · ${loan.note}` : ""}</p></div>` +
-    `<div class="loan-amount"><strong>${money(loan.outstanding)}</strong><span class="muted small">outstanding</span></div>`;
+    `<div class="loan-amount"><strong>${money(loan.outstanding)}</strong><span class="muted small">${style.owes}</span></div>`;
   card.append(head);
 
   const meter = document.createElement("div");
@@ -540,7 +576,7 @@ function loanCard(loan) {
 
   const paid = document.createElement("p");
   paid.className = "muted small";
-  paid.textContent = `${money(loan.repaid)} of ${money(loan.lent)} back`;
+  paid.textContent = `${money(loan.repaid)} of ${money(loan.lent)} ${style.back}`;
   card.append(paid);
 
   if (loan.repayments.length) {
@@ -549,16 +585,17 @@ function loanCard(loan) {
     for (const row of loan.repayments) {
       const item = document.createElement("li");
       item.innerHTML =
-        `<span>${dayLabel(row.date)} · ${money(row.amount)} into ${row.received_in}` +
+        `<span>${dayLabel(row.date)} · ${money(row.amount)} ` +
+        `${loan.direction === "borrowed" ? "from" : "into"} ${icon(row.received_in)} ${row.received_in}` +
         `${row.note ? ` · ${row.note}` : ""}</span>`;
       const actions = document.createElement("span");
       actions.className = "actions";
       actions.append(
         linkButton("Edit", () =>
           openEdit({
-            title: "Edit repayment",
+            title: loan.direction === "borrowed" ? "Edit payment" : "Edit repayment",
             kind: "repayment",
-            row,
+            row: { ...row, direction: loan.direction },
             onSave: async (body) => {
               await api(`/repayments/${row.id}`, { method: "PATCH", body: JSON.stringify(body) });
               toast("Repayment updated.");
@@ -583,19 +620,19 @@ function loanCard(loan) {
   const actions = document.createElement("div");
   actions.className = "row wrap loan-actions";
   actions.append(
-    linkButton("Edit loan", () =>
+    linkButton(loan.direction === "borrowed" ? "Edit" : "Edit loan", () =>
       openEdit({
-        title: `Edit loan to ${loan.friend}`,
+        title: loan.direction === "borrowed" ? `Edit what you took from ${loan.friend}` : `Edit loan to ${loan.friend}`,
         kind: "loan",
         row: loan,
         onSave: async (body) => {
-          await api(`/loans/${loan.id}`, { method: "PATCH", body: JSON.stringify(body) });
+          await api(`/loans/${loan.id}`, { method: "PATCH", body: JSON.stringify({ ...body, direction: loan.direction }) });
           toast("Loan updated.");
           await refreshAll();
         },
       }),
     ),
-    linkButton("Delete loan", async () => {
+    linkButton("Delete", async () => {
       await api(`/loans/${loan.id}`, { method: "DELETE" });
       toast(`Loan to ${loan.friend} deleted.`);
       await refreshAll();
@@ -606,19 +643,21 @@ function loanCard(loan) {
 }
 
 function repaymentForm(loan) {
+  const borrowed = loan.direction === "borrowed";
+  const flow = flowFor(loan.direction);
   const form = document.createElement("form");
   form.className = "repay-form";
   form.innerHTML =
     `<div class="grid">` +
-    `<label class="field">Amount received <input type="number" name="amount" min="0.01" step="0.01" max="${loan.outstanding}" placeholder="${Math.round(loan.outstanding)}" required /></label>` +
+    `<label class="field">${borrowed ? "Amount paid back" : "Amount received"} <input type="number" name="amount" min="0.01" step="0.01" max="${loan.outstanding}" placeholder="${Math.round(loan.outstanding)}" required /></label>` +
     `<label class="field">Date <input type="date" name="date" value="${state.today}" required /></label>` +
     `</div>` +
-    `<fieldset class="field"><legend>Received in</legend><div class="choices"></div></fieldset>` +
-    `<div class="row wrap"><button class="primary" type="submit">Record repayment</button>` +
-    `<button class="ghost" type="button">Paid in full</button></div>` +
+    `<fieldset class="field"><legend>${flow.backLabel}</legend><div class="choices"></div></fieldset>` +
+    `<div class="row wrap"><button class="primary" type="submit">${borrowed ? "Record payment" : "Record repayment"}</button>` +
+    `<button class="ghost" type="button">${borrowed ? "Paid it all back" : "Paid in full"}</button></div>` +
     `<p class="form-msg"></p>`;
 
-  fillChoices(form.querySelector(".choices"), state.options.accounts, `receivedIn-${loan.id}`);
+  fillChoices(form.querySelector(".choices"), flow.backValues, `receivedIn-${loan.id}`);
 
   const submit = async (amount) => {
     const body = {
@@ -628,7 +667,11 @@ function repaymentForm(loan) {
     };
     try {
       await api(`/loans/${loan.id}/repayments`, { method: "POST", body: JSON.stringify(body) });
-      toast(`${icon(body.receivedIn)} ${money(amount)} back from ${loan.friend} into ${body.receivedIn}.`);
+      toast(
+        borrowed
+          ? `${icon(body.receivedIn)} Paid ${money(amount)} back to ${loan.friend} from ${body.receivedIn}.`
+          : `${icon(body.receivedIn)} ${money(amount)} back from ${loan.friend} into ${body.receivedIn}.`,
+      );
       await refreshAll();
     } catch (error) {
       message(form.querySelector(".form-msg"), error.message, false);
@@ -778,9 +821,28 @@ function bindExpenseForm() {
 function bindLoanForm() {
   const form = $("loan-form");
   form.date.value = state.today;
+
+  const direction = () => form.querySelector('input[name="direction"]:checked').value;
+
+  // Lending and borrowing move money opposite ways, so the form retitles itself.
+  const applyDirection = () => {
+    const which = direction();
+    const flow = flowFor(which);
+    $("loan-friend-label").textContent = DIRECTION[which].who;
+    $("loan-account-legend").textContent = flow.openLabel;
+    $("loan-submit").textContent = DIRECTION[which].save;
+    fillChips($("loan-sources"), flow.openValues, "paidFrom");
+  };
+  form.querySelectorAll('input[name="direction"]').forEach((radio) =>
+    radio.addEventListener("change", applyDirection),
+  );
+  applyDirection();
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    const which = direction();
     const body = {
+      direction: which,
       friend: form.friend.value,
       date: form.date.value,
       amount: form.amount.value,
@@ -789,11 +851,16 @@ function bindLoanForm() {
     };
     try {
       const result = await api("/loans", { method: "POST", body: JSON.stringify(body) });
-      const text = `🤝 Lent ${money(result.loan.amount)} to ${result.loan.friend} from ${result.loan.paidFrom}.`;
+      const loan = result.loan;
+      const text =
+        loan.direction === "borrowed"
+          ? `🙏 Borrowed ${money(loan.amount)} from ${loan.friend} into ${loan.paidFrom}.`
+          : `🤝 Lent ${money(loan.amount)} to ${loan.friend} from ${loan.paidFrom}.`;
       message($("loan-msg"), text);
       toast(text);
       form.reset();
       form.date.value = state.today;
+      applyDirection();
       await refreshAll();
     } catch (error) {
       message($("loan-msg"), error.message, false);
@@ -869,11 +936,11 @@ async function boot() {
 
   fillChoices($("income-accounts"), state.options.incomeAccounts, "account");
   fillChoices($("expense-methods"), state.options.expenseMethods, "method");
-  fillChoices($("loan-sources"), state.options.loanSources, "paidFrom");
   fillChips($("income-categories"), state.options.incomeCategories, "category");
   fillChips($("expense-categories"), state.options.expenseCategories, "category");
   fillQuick(document.querySelector('[data-quick="income"]'), $("income-form").amount);
   fillQuick(document.querySelector('[data-quick="expense"]'), $("expense-form").amount);
+  fillQuick(document.querySelector('[data-quick="loan"]'), $("loan-form").amount);
 
   bindTabs();
   bindCurrency();

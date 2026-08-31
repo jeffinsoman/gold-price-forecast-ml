@@ -4,11 +4,22 @@
 export const INCOME_ACCOUNTS = ["Cash in Hand", "Bank"];
 export const EXPENSE_METHODS = ["Cash", "Bank", "Credit Card"];
 
-// Where money paid out to a friend came from.
+// Money you pay out comes from one of these.
 export const LOAN_SOURCES = ["Cash", "Bank", "Credit Card"];
 
-// Where a repayment lands. Only real accounts hold a balance.
+// Money you receive lands in one of these. Only real accounts hold a balance.
 export const ACCOUNTS = ["Cash in Hand", "Bank"];
+
+// 'lent' — you gave money to a friend and it comes back.
+// 'borrowed' — you took money from someone and you pay it back.
+export const LOAN_DIRECTIONS = ["lent", "borrowed"];
+
+/** The choices for the money moving at each end of a loan. */
+export function loanFlow(direction) {
+  return direction === "borrowed"
+    ? { openLabel: "Received in", openValues: ACCOUNTS, backLabel: "Repaid from", backValues: LOAN_SOURCES }
+    : { openLabel: "Paid from", openValues: LOAN_SOURCES, backLabel: "Received in", backValues: ACCOUNTS };
+}
 
 export const INCOME_CATEGORIES = [
   "Salary",
@@ -119,6 +130,9 @@ export function accountForMethod(method) {
 
 /** Reject anything that would put junk in the loan table. Returns a clean row. */
 export function validateLoan(body) {
+  const direction = String(body?.direction ?? "lent").trim();
+  if (!LOAN_DIRECTIONS.includes(direction)) throw new Error("Direction must be lent or borrowed.");
+
   const friend = String(body?.friend ?? "").trim();
   if (!friend) throw new Error("Whose loan is this? Add a name.");
 
@@ -128,12 +142,14 @@ export function validateLoan(body) {
   const amount = Number(body?.amount);
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be greater than zero.");
 
+  const { openLabel, openValues } = loanFlow(direction);
   const paidFrom = String(body?.paidFrom ?? "").trim();
-  if (!LOAN_SOURCES.includes(paidFrom)) {
-    throw new Error(`Paid from must be one of ${LOAN_SOURCES.join(", ")}.`);
+  if (!openValues.includes(paidFrom)) {
+    throw new Error(`${openLabel} must be one of ${openValues.join(", ")}.`);
   }
 
   return {
+    direction,
     friend: friend.slice(0, 60),
     date,
     month: monthKey(date),
@@ -147,7 +163,7 @@ export function validateLoan(body) {
  * Validate one repayment against what is still owed.
  * `outstanding` is the balance before this repayment (excluding the row being edited).
  */
-export function validateRepayment(body, outstanding) {
+export function validateRepayment(body, outstanding, direction = "lent") {
   const date = String(body?.date ?? "").trim();
   if (!isIsoDate(date)) throw new Error("Date must be a real date in YYYY-MM-DD format.");
 
@@ -159,9 +175,10 @@ export function validateRepayment(body, outstanding) {
     throw new Error(`That is more than the ${outstanding.toLocaleString("en-US")} still outstanding.`);
   }
 
+  const { backLabel, backValues } = loanFlow(direction);
   const receivedIn = String(body?.receivedIn ?? "").trim();
-  if (!ACCOUNTS.includes(receivedIn)) {
-    throw new Error(`Received in must be one of ${ACCOUNTS.join(", ")}.`);
+  if (!backValues.includes(receivedIn)) {
+    throw new Error(`${backLabel} must be one of ${backValues.join(", ")}.`);
   }
 
   return {
@@ -174,13 +191,13 @@ export function validateRepayment(body, outstanding) {
 }
 
 /** Outstanding amount and label for one loan. */
-export function loanStatus(amount, repaid) {
+export function loanStatus(amount, repaid, direction = "lent") {
   const lent = Number(amount) || 0;
   const back = Math.round((Number(repaid) || 0) * 100) / 100;
   const outstanding = Math.round((lent - back) * 100) / 100;
-  let status = "Not repaid";
+  let status = direction === "borrowed" ? "Not paid back" : "Not repaid";
   if (outstanding <= 0) status = "Settled";
-  else if (back > 0) status = "Partly repaid";
+  else if (back > 0) status = direction === "borrowed" ? "Partly paid back" : "Partly repaid";
   return {
     lent,
     repaid: back,
@@ -208,24 +225,32 @@ export function summarize({
   expenseUpcoming = 0,
   customBudget = null,
   carriedForward = 0,
+  loanIn = 0,
+  loanOut = 0,
 }) {
   const incomeTotal = sum(incomeByAccount);
   const expenseTotal = sum(expenseByMethod);
 
   // What last month left behind, and what this month has to work with.
   const opening = Math.round((Number(carriedForward) || 0) * 100) / 100;
-  const available = opening + incomeTotal;
 
-  // The balance is carried forward + income - expense, and it is exactly what
-  // the next month opens with.
-  const balance = available - expenseTotal;
+  // Money lent out is gone until it comes back, and money borrowed is in hand
+  // until it is paid back, so both sit alongside income and expense.
+  const moneyIn = Number(loanIn) || 0;    // borrowed, plus repayments from friends
+  const moneyOut = Number(loanOut) || 0;  // lent out, plus what you paid back
+  const available = opening + incomeTotal + moneyIn;
+  const spent = expenseTotal + moneyOut;
+
+  // The balance is what is genuinely left, and it is exactly what the next
+  // month opens with.
+  const balance = available - spent;
 
   const budgetIsCustom = customBudget !== null && customBudget !== undefined;
   const budget = budgetIsCustom ? Number(customBudget) : available;
 
-  const hasEntries = incomeTotal > 0 || expenseTotal > 0;
-  const isOverBudget = hasEntries && expenseTotal > budget;
-  const remaining = budget - expenseTotal;
+  const hasEntries = incomeTotal > 0 || expenseTotal > 0 || moneyIn > 0 || moneyOut > 0;
+  const isOverBudget = hasEntries && spent > budget;
+  const remaining = budget - spent;
   const overBy = Math.max(0, -remaining);
 
   let status = "NO ENTRIES";
@@ -239,8 +264,8 @@ export function summarize({
   }
 
   let budgetUsedPct = 0;
-  if (budget > 0) budgetUsedPct = (expenseTotal / budget) * 100;
-  else if (expenseTotal > 0) budgetUsedPct = 100;
+  if (budget > 0) budgetUsedPct = (spent / budget) * 100;
+  else if (spent > 0) budgetUsedPct = 100;
 
   return {
     month,
@@ -252,6 +277,9 @@ export function summarize({
     balance,
     carriedForward: opening,
     available,
+    loanIn: moneyIn,
+    loanOut: moneyOut,
+    spent,
     budget,
     budgetIsCustom,
     budgetUsedPct,

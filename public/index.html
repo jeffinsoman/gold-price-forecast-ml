@@ -152,35 +152,47 @@
   <!-- FRIENDS -->
   <section id="page-friends" class="page hidden">
     <h2>Money with friends</h2>
-    <p class="muted">Cash you have lent out. Repayments go back into Cash in Hand or Bank, in full or a bit at a time.</p>
+    <p class="muted">Both directions: what you have lent out, and what you have taken from someone. Either can be paid back in full or a bit at a time.</p>
 
     <div class="tiles">
-      <div class="tile"><span class="tile-label"><span aria-hidden="true">🤝</span> Lent out</span><span class="tile-value" id="tile-lent">—</span></div>
-      <div class="tile"><span class="tile-label"><span aria-hidden="true">↩️</span> Come back</span><span class="tile-value" id="tile-repaid">—</span></div>
-      <div class="tile"><span class="tile-label"><span aria-hidden="true">⏳</span> Still with friends</span><span class="tile-value" id="tile-outstanding">—</span></div>
+      <div class="tile"><span class="tile-label"><span aria-hidden="true">🤝</span> They owe you</span><span class="tile-value" id="tile-owed-you">—</span><span class="tile-foot" id="tile-owed-you-foot"></span></div>
+      <div class="tile"><span class="tile-label"><span aria-hidden="true">🙏</span> You owe</span><span class="tile-value" id="tile-you-owe">—</span><span class="tile-foot" id="tile-you-owe-foot"></span></div>
+      <div class="tile"><span class="tile-label"><span aria-hidden="true">⚖️</span> Net position</span><span class="tile-value" id="tile-net">—</span><span class="tile-foot" id="tile-net-foot"></span></div>
     </div>
 
     <form id="loan-form" class="card form">
-      <h3><span aria-hidden="true">🤝</span> Lend money</h3>
+      <fieldset class="field">
+        <legend>Which way?</legend>
+        <div class="choices" id="loan-direction">
+          <label class="choice"><input type="radio" name="direction" value="lent" checked /><span><span aria-hidden="true">🤝</span> I lent money</span></label>
+          <label class="choice"><input type="radio" name="direction" value="borrowed" /><span><span aria-hidden="true">🙏</span> I borrowed money</span></label>
+        </div>
+      </fieldset>
       <div class="grid">
-        <label class="field">Friend <input type="text" name="friend" maxlength="60" placeholder="Name" required /></label>
+        <label class="field"><span id="loan-friend-label">Lent to</span> <input type="text" name="friend" maxlength="60" placeholder="Name" required /></label>
         <label class="field">Date <input type="date" name="date" required /></label>
       </div>
       <div class="grid">
-        <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" placeholder="500" required /></label>
+        <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" placeholder="500" required />
+          <span class="quick" data-quick="loan"></span></label>
         <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
       </div>
       <fieldset class="field">
-        <legend>Paid from</legend>
-        <div class="choices" id="loan-sources"></div>
+        <legend id="loan-account-legend">Paid from</legend>
+        <div class="chips" id="loan-sources"></div>
       </fieldset>
-      <button class="primary" type="submit">Save loan</button>
+      <button class="primary" type="submit" id="loan-submit">Save loan</button>
       <p class="form-msg" id="loan-msg"></p>
     </form>
 
     <div class="panel">
-      <h3><span aria-hidden="true">⏳</span> Outstanding <span class="pill" id="loan-count">0</span></h3>
-      <div id="loan-list"></div>
+      <h3><span aria-hidden="true">🤝</span> They owe you <span class="pill" id="loan-count-lent">0</span></h3>
+      <div id="loan-list-lent"></div>
+    </div>
+
+    <div class="panel">
+      <h3><span aria-hidden="true">🙏</span> You owe <span class="pill" id="loan-count-borrowed">0</span></h3>
+      <div id="loan-list-borrowed"></div>
     </div>
 
     <div class="panel">

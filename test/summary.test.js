@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   accountForMethod,
   isIsoDate,
+  loanFlow,
   loanStatus,
   monthKey,
   monthLabel,
@@ -183,6 +184,7 @@ test("loan status tracks partial repayment", () => {
 test("loans are validated", () => {
   const loan = validateLoan({ friend: "  Sam  ", date: "2026-09-02", amount: "500", paidFrom: "Cash", note: "trip" });
   assert.deepEqual(loan, {
+    direction: "lent",
     friend: "Sam",
     date: "2026-09-02",
     month: "2026-09",
@@ -205,4 +207,77 @@ test("repayments cannot exceed what is outstanding", () => {
 
   assert.throws(() => validateRepayment({ date: "2026-09-20", amount: 501, receivedIn: "Bank" }, 500), /outstanding/);
   assert.throws(() => validateRepayment({ date: "2026-09-20", amount: 100, receivedIn: "Credit Card" }, 500), /Received in/);
+});
+
+test("money lent leaves the balance until it comes back", () => {
+  // Aug: earned 1,514, spent 120, lent 500 to a friend. The 500 is not in hand.
+  const aug = summarize({
+    month: "2026-08",
+    incomeByAccount: { Bank: 1514 },
+    expenseByMethod: { Cash: 120 },
+    loanOut: 500,
+  });
+  assert.equal(aug.spent, 620);
+  assert.equal(aug.balance, 894);
+  assert.equal(aug.status, "IN CONTROL");
+
+  // Sep: the friend pays it back, so it lands back in the balance.
+  const sep = summarize({ month: "2026-09", carriedForward: aug.balance, loanIn: 500 });
+  assert.equal(sep.carriedForward, 894);
+  assert.equal(sep.available, 1394);
+  assert.equal(sep.balance, 1394);
+});
+
+test("money borrowed is in hand until it is paid back", () => {
+  const sep = summarize({
+    month: "2026-09",
+    incomeByAccount: { Bank: 1000 },
+    expenseByMethod: { Cash: 300 },
+    loanIn: 2000,
+  });
+  assert.equal(sep.available, 3000);
+  assert.equal(sep.balance, 2700);
+
+  const oct = summarize({ month: "2026-10", carriedForward: sep.balance, loanOut: 800 });
+  assert.equal(oct.spent, 800);
+  assert.equal(oct.balance, 1900);
+});
+
+test("lending more than you have goes out of budget", () => {
+  const s = summarize({
+    month: "2026-09",
+    incomeByAccount: { Bank: 1000 },
+    expenseByMethod: { Cash: 200 },
+    loanOut: 900,
+  });
+  assert.equal(s.status, "OUT OF BUDGET");
+  assert.equal(s.overBy, 100);
+  assert.equal(s.balance, -100);
+});
+
+test("each direction moves money the opposite way", () => {
+  assert.deepEqual(loanFlow("lent"), {
+    openLabel: "Paid from",
+    openValues: ["Cash", "Bank", "Credit Card"],
+    backLabel: "Received in",
+    backValues: ["Cash in Hand", "Bank"],
+  });
+  assert.deepEqual(loanFlow("borrowed"), {
+    openLabel: "Received in",
+    openValues: ["Cash in Hand", "Bank"],
+    backLabel: "Repaid from",
+    backValues: ["Cash", "Bank", "Credit Card"],
+  });
+
+  const borrowed = validateLoan({ direction: "borrowed", friend: "Ali", date: "2026-09-02", amount: 2000, paidFrom: "Bank" });
+  assert.equal(borrowed.direction, "borrowed");
+  assert.throws(
+    () => validateLoan({ direction: "borrowed", friend: "Ali", date: "2026-09-02", amount: 20, paidFrom: "Credit Card" }),
+    /Received in/,
+  );
+  assert.throws(
+    () => validateRepayment({ date: "2026-09-20", amount: 100, receivedIn: "Cash in Hand" }, 500, "borrowed"),
+    /Repaid from/,
+  );
+  assert.equal(loanStatus(2000, 500, "borrowed").status, "Partly paid back");
 });

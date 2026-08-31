@@ -292,3 +292,9 @@ h3 { display: flex; align-items: center; gap: 7px; }
   .trend-label { font-size: 0.62rem; }
   .tile-value { font-size: 1.3rem; }
 }
+
+/* Borrowed money reads the other way round */
+.loan.borrowed { border-left: 3px solid #f59e0b; }
+.loan.lent { border-left: 3px solid var(--blue); }
+.loan.settled { border-left-color: var(--green); }
+.loan.borrowed .repayments li { border-left-color: #f59e0b; }
