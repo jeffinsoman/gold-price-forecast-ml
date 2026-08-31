@@ -32,6 +32,7 @@ test("out of budget when spending beats income", () => {
   assert.equal(s.status, "OUT OF BUDGET");
   assert.equal(s.overBy, 1000);
   assert.equal(s.balance, -1000);
+  assert.equal(s.available, 9000);
   assert.equal(s.statusMessage, "Out of budget by 1,000");
 });
 
@@ -124,30 +125,47 @@ test("entries are validated and normalised", () => {
   assert.throws(() => validateEntry({ date: "2026-09-01", amount: 10, method: "Cash in Hand" }, "expense"), /Payment method/);
 });
 
-test("a month opens with what the last one left behind", () => {
+test("balance is carried forward + income - expense, and it carries on", () => {
   const sep = summarize({
     month: "2026-09",
     incomeByAccount: { Bank: 700 },
     expenseByMethod: { Cash: 500 },
   });
-  assert.equal(sep.closingBalance, 200);
   assert.equal(sep.carriedForward, 0);
+  assert.equal(sep.balance, 200);
 
-  const oct = summarize({ month: "2026-10", carriedForward: sep.closingBalance });
+  // Next month opens on exactly that balance.
+  const oct = summarize({ month: "2026-10", carriedForward: sep.balance });
   assert.equal(oct.carriedForward, 200);
   assert.equal(oct.available, 200);
-  assert.equal(oct.closingBalance, 200);
+  assert.equal(oct.balance, 200);
 
-  // Carried money does not excuse overspending: the verdict still watches income.
+  // 659 carried + 8,947 earned - 7,810 spent = 1,796 into November.
   const nov = summarize({
     month: "2026-11",
+    incomeByAccount: { Bank: 8947 },
+    expenseByMethod: { Cash: 7810 },
+    carriedForward: 659,
+  });
+  assert.equal(nov.available, 9606);
+  assert.equal(nov.balance, 1796);
+  assert.equal(nov.budget, 9606);
+  assert.equal(nov.status, "IN CONTROL");
+  assert.equal(nov.statusMessage, "In control, 1,796 left");
+  assert.equal(nov.remaining, nov.balance);
+});
+
+test("spending past the carried balance goes out of budget", () => {
+  const s = summarize({
+    month: "2026-11",
     incomeByAccount: { Bank: 1000 },
-    expenseByMethod: { Cash: 1200 },
+    expenseByMethod: { Cash: 1400 },
     carriedForward: 200,
   });
-  assert.equal(nov.status, "OUT OF BUDGET");
-  assert.equal(nov.available, 1200);
-  assert.equal(nov.closingBalance, 0);
+  assert.equal(s.available, 1200);
+  assert.equal(s.balance, -200);
+  assert.equal(s.status, "OUT OF BUDGET");
+  assert.equal(s.overBy, 200);
 });
 
 test("expense methods map onto the accounts that hold money", () => {

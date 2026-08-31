@@ -105,18 +105,25 @@ Opens on the current month and answers one question — did this month stay insi
 >
 > With an expense of 5,000 instead, the same month reads **IN CONTROL** — 4,000 left.
 
-The budget for a month is that month's income by default, so spending more than you earned turns
-the card red. A custom budget can be pinned per month from the Transactions tab. The dashboard also
+A custom budget can be pinned per month from the Transactions tab when you want to save part of what
+is available rather than spend to the line. The dashboard also
 shows income split by account, expense split by payment method, a six-month comparison, how much of
 the month's spending is already paid vs still due, and the list of upcoming expenses.
 
 Amounts show in **AED** by default; the field in the top-right switches the label to any other
 currency and remembers the choice in that browser.
 
-Every month opens with what the previous one left over: income minus expense, carried forward. Spend
-700 out of 500 income and the next month starts 200 down; the dashboard shows both ends of that.
-The IN CONTROL / OUT OF BUDGET verdict still watches the month's own income, so a healthy carried
-balance never hides overspending.
+Every month opens with what the previous one left over, and the balance is that plus this month's
+takings less its spending:
+
+```
+carried forward + income - expense = balance left   →   opens the next month
+        659     +  8,947 -   7,810 =     1,796
+```
+
+That balance is also what the month is measured against: with no custom budget the limit is
+`carried forward + income`, so the card reads IN CONTROL while the balance is positive and OUT OF
+BUDGET once spending eats past it.
 
 ### Add income
 Date plus amount, received into one of two places:

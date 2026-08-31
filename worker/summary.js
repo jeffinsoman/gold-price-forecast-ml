@@ -211,8 +211,17 @@ export function summarize({
 }) {
   const incomeTotal = sum(incomeByAccount);
   const expenseTotal = sum(expenseByMethod);
+
+  // What last month left behind, and what this month has to work with.
+  const opening = Math.round((Number(carriedForward) || 0) * 100) / 100;
+  const available = opening + incomeTotal;
+
+  // The balance is carried forward + income - expense, and it is exactly what
+  // the next month opens with.
+  const balance = available - expenseTotal;
+
   const budgetIsCustom = customBudget !== null && customBudget !== undefined;
-  const budget = budgetIsCustom ? Number(customBudget) : incomeTotal;
+  const budget = budgetIsCustom ? Number(customBudget) : available;
 
   const hasEntries = incomeTotal > 0 || expenseTotal > 0;
   const isOverBudget = hasEntries && expenseTotal > budget;
@@ -229,10 +238,6 @@ export function summarize({
     statusMessage = `In control, ${format(remaining)} left`;
   }
 
-  // What last month left behind, and what this month hands to the next one.
-  const opening = Math.round((Number(carriedForward) || 0) * 100) / 100;
-  const closingBalance = opening + incomeTotal - expenseTotal;
-
   let budgetUsedPct = 0;
   if (budget > 0) budgetUsedPct = (expenseTotal / budget) * 100;
   else if (expenseTotal > 0) budgetUsedPct = 100;
@@ -244,10 +249,9 @@ export function summarize({
     expenseTotal,
     expensePaid: Number(expensePaid) || 0,
     expenseUpcoming: Number(expenseUpcoming) || 0,
-    balance: incomeTotal - expenseTotal,
+    balance,
     carriedForward: opening,
-    available: opening + incomeTotal,
-    closingBalance,
+    available,
     budget,
     budgetIsCustom,
     budgetUsedPct,

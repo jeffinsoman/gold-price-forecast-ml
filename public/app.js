@@ -275,7 +275,7 @@ async function loadDashboard(month) {
   card.querySelector(".status-headline").textContent =
     `${s.label} · Income ${money(s.incomeTotal)} · Expense ${money(s.expenseTotal)} · ${s.status}`;
   card.querySelector(".status-detail").textContent =
-    `${s.statusMessage} · budget ${money(s.budget)} (${s.budgetIsCustom ? "custom" : "this month's income"}) · ${Math.round(s.budgetUsedPct)}% used`;
+    `${s.statusMessage} · budget ${money(s.budget)} (${s.budgetIsCustom ? "custom" : "carried forward + this month's income"}) · ${Math.round(s.budgetUsedPct)}% used`;
 
   $("tile-carried").textContent = money(s.carriedForward);
   $("tile-carried-foot").textContent = `left over from ${previousMonthLabel(month)}`;
@@ -286,12 +286,11 @@ async function loadDashboard(month) {
   const balance = $("tile-balance");
   balance.textContent = money(s.balance);
   balance.classList.toggle("negative", s.balance < 0);
+  $("tile-balance-foot").textContent =
+    `${money(s.carriedForward)} + ${money(s.incomeTotal)} − ${money(s.expenseTotal)}, opens ${nextMonthLabel(month)}`;
 
-  const closing = $("tile-closing");
-  closing.textContent = money(s.closingBalance);
-  closing.classList.toggle("negative", s.closingBalance < 0);
-  $("tile-closing-foot").textContent = `opens ${nextMonthLabel(month)}`;
-
+  // Without a custom budget this tile would just repeat the balance.
+  $("tile-budget-card").hidden = !s.budgetIsCustom;
   $("tile-budget-label").textContent = s.isOverBudget ? "Over budget by" : "Budget left";
   $("tile-budget").textContent = money(s.isOverBudget ? s.overBy : s.remaining);
 
@@ -299,7 +298,7 @@ async function loadDashboard(month) {
   meter.style.width = `${Math.min(100, s.budgetUsedPct)}%`;
   meter.classList.toggle("over", s.isOverBudget);
   $("budget-note").textContent = s.hasEntries
-    ? `${money(s.carriedForward)} carried in, ${money(s.available)} available this month, ${money(s.expensePaid)} spent so far, ${money(s.expenseUpcoming)} still to come.`
+    ? `${money(s.available)} available this month, ${money(s.expensePaid)} spent so far, ${money(s.expenseUpcoming)} still to come.`
     : `${money(s.carriedForward)} carried in. Add income and expenses to see this month take shape.`;
 
   // What you actually hold, plus what is out with friends.
@@ -493,7 +492,7 @@ async function loadTransactions(month) {
   const s = data.summary;
   $("budget-help").textContent = s.budgetIsCustom
     ? `${s.label} uses a custom budget of ${money(s.budget)}.`
-    : `${s.label} compares spending against its income (${money(s.incomeTotal)}). Set your own limit to save part of it.`;
+    : `${s.label} compares spending against what it has to work with — ${money(s.carriedForward)} carried forward plus ${money(s.incomeTotal)} income, so ${money(s.available)}. Set your own limit to save part of it.`;
   $("budget-input").value = s.budgetIsCustom ? s.budget : "";
   $("budget-clear").classList.toggle("hidden", !s.budgetIsCustom);
   $("budget-msg").textContent = "";
