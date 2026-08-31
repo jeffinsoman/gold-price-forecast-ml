@@ -27,6 +27,7 @@
   <button class="tab is-active" data-page="dashboard">Dashboard</button>
   <button class="tab" data-page="income">Add income</button>
   <button class="tab" data-page="expense">Add expense</button>
+  <button class="tab" data-page="friends">Friends</button>
   <button class="tab" data-page="transactions">Transactions</button>
 </nav>
 
@@ -44,9 +45,11 @@
     </div>
 
     <div class="tiles">
+      <div class="tile"><span class="tile-label">Carried forward</span><span class="tile-value" id="tile-carried">—</span><span class="tile-foot" id="tile-carried-foot"></span></div>
       <div class="tile"><span class="tile-label">Income</span><span class="tile-value" id="tile-income">—</span></div>
       <div class="tile"><span class="tile-label">Expense</span><span class="tile-value" id="tile-expense">—</span><span class="tile-foot" id="tile-upcoming"></span></div>
-      <div class="tile"><span class="tile-label">Balance</span><span class="tile-value" id="tile-balance">—</span></div>
+      <div class="tile"><span class="tile-label">Balance this month</span><span class="tile-value" id="tile-balance">—</span></div>
+      <div class="tile"><span class="tile-label">Carries to next month</span><span class="tile-value" id="tile-closing">—</span><span class="tile-foot" id="tile-closing-foot"></span></div>
       <div class="tile"><span class="tile-label" id="tile-budget-label">Budget left</span><span class="tile-value" id="tile-budget">—</span></div>
     </div>
 
@@ -54,6 +57,11 @@
     <p class="muted small" id="budget-note"></p>
 
     <div class="split">
+      <div class="panel">
+        <h3>What you hold now</h3>
+        <ul class="bars" id="account-balances"></ul>
+        <p class="muted small" id="lending-line"></p>
+      </div>
       <div class="panel">
         <h3>Income by account</h3>
         <ul class="bars" id="income-split"></ul>
@@ -129,6 +137,46 @@
     <div class="panel"><h3>Recent expenses</h3><div id="expense-recent"></div></div>
   </section>
 
+  <!-- FRIENDS -->
+  <section id="page-friends" class="page hidden">
+    <h2>Money with friends</h2>
+    <p class="muted">Cash you have lent out. Repayments go back into Cash in Hand or Bank, in full or a bit at a time.</p>
+
+    <div class="tiles">
+      <div class="tile"><span class="tile-label">Lent out</span><span class="tile-value" id="tile-lent">—</span></div>
+      <div class="tile"><span class="tile-label">Come back</span><span class="tile-value" id="tile-repaid">—</span></div>
+      <div class="tile"><span class="tile-label">Still with friends</span><span class="tile-value" id="tile-outstanding">—</span></div>
+    </div>
+
+    <form id="loan-form" class="card form">
+      <h3>Lend money</h3>
+      <div class="grid">
+        <label class="field">Friend <input type="text" name="friend" maxlength="60" placeholder="Name" required /></label>
+        <label class="field">Date <input type="date" name="date" required /></label>
+      </div>
+      <div class="grid">
+        <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" placeholder="500" required /></label>
+        <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
+      </div>
+      <fieldset class="field">
+        <legend>Paid from</legend>
+        <div class="choices" id="loan-sources"></div>
+      </fieldset>
+      <button class="primary" type="submit">Save loan</button>
+      <p class="form-msg" id="loan-msg"></p>
+    </form>
+
+    <div class="panel">
+      <h3>Outstanding <span class="pill" id="loan-count">0</span></h3>
+      <div id="loan-list"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Settled</h3>
+      <div id="loan-settled"></div>
+    </div>
+  </section>
+
   <!-- TRANSACTIONS -->
   <section id="page-transactions" class="page hidden">
     <div class="row between">
@@ -151,6 +199,18 @@
     <div class="panel"><h3>Expenses</h3><div id="tx-expenses"></div></div>
   </section>
 </main>
+
+<dialog id="edit-dialog">
+  <form id="edit-form" class="form" method="dialog">
+    <h3 id="edit-title">Edit</h3>
+    <div id="edit-fields"></div>
+    <div class="row wrap">
+      <button class="primary" type="submit" value="save">Save changes</button>
+      <button class="ghost" type="button" id="edit-cancel">Cancel</button>
+    </div>
+    <p class="form-msg" id="edit-msg"></p>
+  </form>
+</dialog>
 
 <script src="/app.js" type="module"></script>
 </body>

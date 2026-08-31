@@ -4,6 +4,12 @@
 export const INCOME_ACCOUNTS = ["Cash in Hand", "Bank"];
 export const EXPENSE_METHODS = ["Cash", "Bank", "Credit Card"];
 
+// Where money paid out to a friend came from.
+export const LOAN_SOURCES = ["Cash", "Bank", "Credit Card"];
+
+// Where a repayment lands. Only real accounts hold a balance.
+export const ACCOUNTS = ["Cash in Hand", "Bank"];
+
 export const INCOME_CATEGORIES = [
   "Salary",
   "Business",
@@ -104,6 +110,86 @@ export function validateEntry(body, kind) {
   };
 }
 
+/** The account an expense method draws on. Credit Card is a liability, not an account. */
+export function accountForMethod(method) {
+  if (method === "Cash") return "Cash in Hand";
+  if (method === "Bank") return "Bank";
+  return null;
+}
+
+/** Reject anything that would put junk in the loan table. Returns a clean row. */
+export function validateLoan(body) {
+  const friend = String(body?.friend ?? "").trim();
+  if (!friend) throw new Error("Whose loan is this? Add a name.");
+
+  const date = String(body?.date ?? "").trim();
+  if (!isIsoDate(date)) throw new Error("Date must be a real date in YYYY-MM-DD format.");
+
+  const amount = Number(body?.amount);
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be greater than zero.");
+
+  const paidFrom = String(body?.paidFrom ?? "").trim();
+  if (!LOAN_SOURCES.includes(paidFrom)) {
+    throw new Error(`Paid from must be one of ${LOAN_SOURCES.join(", ")}.`);
+  }
+
+  return {
+    friend: friend.slice(0, 60),
+    date,
+    month: monthKey(date),
+    amount: Math.round(amount * 100) / 100,
+    paidFrom,
+    note: String(body?.note ?? "").trim().slice(0, 200),
+  };
+}
+
+/**
+ * Validate one repayment against what is still owed.
+ * `outstanding` is the balance before this repayment (excluding the row being edited).
+ */
+export function validateRepayment(body, outstanding) {
+  const date = String(body?.date ?? "").trim();
+  if (!isIsoDate(date)) throw new Error("Date must be a real date in YYYY-MM-DD format.");
+
+  const amount = Number(body?.amount);
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be greater than zero.");
+
+  const rounded = Math.round(amount * 100) / 100;
+  if (rounded > Math.round(outstanding * 100) / 100 + 0.001) {
+    throw new Error(`That is more than the ${outstanding.toLocaleString("en-US")} still outstanding.`);
+  }
+
+  const receivedIn = String(body?.receivedIn ?? "").trim();
+  if (!ACCOUNTS.includes(receivedIn)) {
+    throw new Error(`Received in must be one of ${ACCOUNTS.join(", ")}.`);
+  }
+
+  return {
+    date,
+    month: monthKey(date),
+    amount: rounded,
+    receivedIn,
+    note: String(body?.note ?? "").trim().slice(0, 200),
+  };
+}
+
+/** Outstanding amount and label for one loan. */
+export function loanStatus(amount, repaid) {
+  const lent = Number(amount) || 0;
+  const back = Math.round((Number(repaid) || 0) * 100) / 100;
+  const outstanding = Math.round((lent - back) * 100) / 100;
+  let status = "Not repaid";
+  if (outstanding <= 0) status = "Settled";
+  else if (back > 0) status = "Partly repaid";
+  return {
+    lent,
+    repaid: back,
+    outstanding: Math.max(0, outstanding),
+    status,
+    repaidPct: lent > 0 ? Math.min(100, (back / lent) * 100) : 0,
+  };
+}
+
 function sum(values) {
   return Object.values(values).reduce((total, value) => total + value, 0);
 }
@@ -121,6 +207,7 @@ export function summarize({
   expensePaid = 0,
   expenseUpcoming = 0,
   customBudget = null,
+  carriedForward = 0,
 }) {
   const incomeTotal = sum(incomeByAccount);
   const expenseTotal = sum(expenseByMethod);
@@ -142,6 +229,10 @@ export function summarize({
     statusMessage = `In control, ${format(remaining)} left`;
   }
 
+  // What last month left behind, and what this month hands to the next one.
+  const opening = Math.round((Number(carriedForward) || 0) * 100) / 100;
+  const closingBalance = opening + incomeTotal - expenseTotal;
+
   let budgetUsedPct = 0;
   if (budget > 0) budgetUsedPct = (expenseTotal / budget) * 100;
   else if (expenseTotal > 0) budgetUsedPct = 100;
@@ -154,6 +245,9 @@ export function summarize({
     expensePaid: Number(expensePaid) || 0,
     expenseUpcoming: Number(expenseUpcoming) || 0,
     balance: incomeTotal - expenseTotal,
+    carriedForward: opening,
+    available: opening + incomeTotal,
+    closingBalance,
     budget,
     budgetIsCustom,
     budgetUsedPct,

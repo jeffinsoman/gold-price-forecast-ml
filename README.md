@@ -113,6 +113,11 @@ the month's spending is already paid vs still due, and the list of upcoming expe
 Amounts show in **AED** by default; the field in the top-right switches the label to any other
 currency and remembers the choice in that browser.
 
+Every month opens with what the previous one left over: income minus expense, carried forward. Spend
+700 out of 500 income and the next month starts 200 down; the dashboard shows both ends of that.
+The IN CONTROL / OUT OF BUDGET verdict still watches the month's own income, so a healthy carried
+balance never hides overspending.
+
 ### Add income
 Date plus amount, received into one of two places:
 
@@ -127,6 +132,21 @@ the month it falls in and shown as *upcoming* until its date arrives. Paid by:
 * **Bank**
 * **Credit Card**
 
+### Money with friends
+Lend cash out and track what comes back. Each loan records the friend, the date, the amount and the
+account it came from. Repayments are separate rows, so a friend can pay back in instalments: each one
+carries its own date and lands in **Cash in Hand** or **Bank**, and the loan reads *Not repaid*,
+*Partly repaid* or *Settled* as the balance moves. A repayment can never exceed what is outstanding,
+and a loan cannot be edited below what has already come back.
+
+Lending is not an expense, so it never touches the month's verdict — but it does move real money, so
+the dashboard's **What you hold now** panel nets it out: income, minus spending, minus what is lent,
+plus what has been repaid, per account.
+
+### Editing
+Income, expenses, loans and repayments are all editable from their lists — the pencil opens a dialog
+with the same fields as the original form. Deleting a loan removes its repayments with it.
+
 ### API
 
 | Method | Route | Purpose |
@@ -135,8 +155,14 @@ the month it falls in and shown as *upcoming* until its date arrives. Paid by:
 | GET | `/api/month/:month` | Summary, six-month trend, entries and upcoming list for `2026-09` |
 | POST | `/api/income` | `{ date, amount, account, category, note }` |
 | POST | `/api/expense` | `{ date, amount, method, category, note }` |
+| PATCH | `/api/income/:id` · `/api/expense/:id` | Edit an entry |
 | DELETE | `/api/income/:id` · `/api/expense/:id` | Remove an entry |
 | PUT | `/api/budget` | `{ month, amount }`, or `amount: null` to fall back to income |
+| GET | `/api/loans` | Every loan with its repayments, outstanding balance and status |
+| POST | `/api/loans` | `{ friend, date, amount, paidFrom, note }` |
+| PATCH · DELETE | `/api/loans/:id` | Edit or remove a loan (and its repayments) |
+| POST | `/api/loans/:id/repayments` | `{ date, amount, receivedIn, note }` — full or partial |
+| PATCH · DELETE | `/api/repayments/:id` | Edit or remove one repayment |
 
 ### Layout
 | Path | What it is |
@@ -144,6 +170,6 @@ the month it falls in and shown as *upcoming* until its date arrives. Paid by:
 | `worker/index.js` | Worker: API routes and D1 queries |
 | `worker/summary.js` | Month roll-up rules and input validation (no Worker globals, unit tested) |
 | `public/` | Dashboard, forms and styles served as static assets |
-| `migrations/` | D1 schema |
+| `migrations/` | D1 schema: entries and budgets, then loans and repayments |
 | `test/` | Tests for the budget, upcoming-expense and validation logic |
 | `wrangler.jsonc` | Worker name, assets binding and the D1 binding (`DB`) |

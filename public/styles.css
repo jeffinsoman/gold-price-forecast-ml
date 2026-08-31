@@ -163,3 +163,39 @@ button.link:hover { text-decoration: underline; }
 .form-msg.bad { color: var(--red); }
 
 .empty { color: var(--muted); font-size: 0.9rem; }
+
+/* Loans with friends */
+.loan {
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px;
+}
+.loan.settled { opacity: 0.75; }
+.loan-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.loan-name { font-weight: 700; margin-right: 8px; }
+.loan-amount { text-align: right; display: flex; flex-direction: column; }
+.loan-amount strong { font-size: 1.15rem; }
+.loan-actions { justify-content: flex-end; }
+
+.repayments { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.repayments li {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-size: 0.85rem; color: var(--muted); border-left: 2px solid var(--green); padding-left: 10px;
+}
+
+.repay-form {
+  display: flex; flex-direction: column; gap: 10px;
+  border-top: 1px solid var(--line); padding-top: 12px;
+}
+
+td.actions, .actions { display: flex; gap: 2px; flex-wrap: wrap; }
+button.link { color: var(--blue); }
+button.link.danger { color: var(--red); }
+
+/* Edit dialog */
+dialog {
+  border: 1px solid var(--line); border-radius: var(--radius); padding: 20px;
+  background: var(--panel); color: var(--ink);
+  width: min(460px, calc(100vw - 32px)); max-height: 88vh; overflow-y: auto;
+}
+dialog::backdrop { background: rgba(15, 23, 42, 0.55); }
+dialog .field { margin-bottom: 12px; }
