@@ -142,6 +142,22 @@ the month it falls in and shown as *upcoming* until its date arrives. Paid by:
 * **Bank**
 * **Credit Card**
 
+### Repeating every month
+Salary, rent, EMI, a subscription — set the rule once on the **Repeat** page and the entry is written
+each month on the day you choose:
+
+* Works on both sides — income **and** payments, with the account list matching (a payment can go on
+  the Credit Card; income cannot).
+* The **31st** falls back to the last day in shorter months: September gets the 30th, February the
+  28th or 29th.
+* Rules can start in a past month (the missed entries are written at once), carry an optional end
+  month, and be **paused** and resumed.
+* Entries are written up to next month, so what is coming is visible before it happens.
+* What a rule writes is an **ordinary entry**: edit one month's amount, or delete it, and the rule
+  leaves it alone — a deleted month is remembered and not written again.
+* The add forms carry a **"repeat this every month"** tick, which turns what you just entered into a
+  rule from the following month.
+
 ### Money with friends
 Both directions, on one page:
 
@@ -204,6 +220,9 @@ with the same fields as the original form. Deleting a loan removes its repayment
 | PATCH · DELETE | `/api/loans/:id` | Edit or remove a loan (and its repayments) |
 | POST | `/api/loans/:id/repayments` | `{ date, amount, receivedIn, note }` — full or partial |
 | PATCH · DELETE | `/api/repayments/:id` | Edit or remove one repayment |
+| GET | `/api/recurring` | Standing rules with their next date and monthly totals |
+| POST | `/api/recurring` | `{ kind, amount, account, category, day, startMonth, endMonth, note }` |
+| PATCH · DELETE | `/api/recurring/:id` | Edit, pause (`active: false`) or remove a rule |
 
 ### Layout
 | Path | What it is |
@@ -211,6 +230,6 @@ with the same fields as the original form. Deleting a loan removes its repayment
 | `worker/index.js` | Worker: API routes and D1 queries |
 | `worker/summary.js` | Month roll-up rules and input validation (no Worker globals, unit tested) |
 | `public/` | Dashboard, forms and styles served as static assets |
-| `migrations/` | D1 schema: entries and budgets, then loans and repayments |
+| `migrations/` | D1 schema: entries and budgets, loans and repayments, then repeats |
 | `test/` | Tests for the budget, upcoming-expense and validation logic |
 | `wrangler.jsonc` | Worker name, assets binding and the D1 binding (`DB`) |

@@ -27,6 +27,7 @@
   <button class="tab is-active" data-page="dashboard"><span aria-hidden="true">📊</span> Dashboard</button>
   <button class="tab" data-page="income"><span aria-hidden="true">💰</span> Income</button>
   <button class="tab" data-page="expense"><span aria-hidden="true">🧾</span> Expense</button>
+  <button class="tab" data-page="repeat"><span aria-hidden="true">🔁</span> Repeat</button>
   <button class="tab" data-page="friends"><span aria-hidden="true">🤝</span> Friends</button>
   <button class="tab" data-page="transactions"><span aria-hidden="true">📋</span> History</button>
 </nav>
@@ -109,6 +110,7 @@
         <legend>Category</legend>
         <div class="chips" id="income-categories"></div>
       </fieldset>
+      <label class="check"><input type="checkbox" name="repeat" /> <span><span aria-hidden="true">🔁</span> Repeat this every month on the same day</span></label>
       <button class="primary" type="submit">Save income</button>
       <p class="form-msg" id="income-msg"></p>
     </form>
@@ -143,10 +145,59 @@
         <legend>Category</legend>
         <div class="chips" id="expense-categories"></div>
       </fieldset>
+      <label class="check"><input type="checkbox" name="repeat" /> <span><span aria-hidden="true">🔁</span> Repeat this every month on the same day</span></label>
       <button class="primary" type="submit">Save expense</button>
       <p class="form-msg" id="expense-msg"></p>
     </form>
     <div class="panel"><h3>Recent expenses</h3><div id="expense-recent"></div></div>
+  </section>
+
+  <!-- REPEAT -->
+  <section id="page-repeat" class="page hidden">
+    <h2>Repeating every month</h2>
+    <p class="muted">Salary, rent, EMI, subscriptions — set it once and the entry is written each month, on the day you pick. Anything written stays an ordinary entry you can edit or delete.</p>
+
+    <div class="tiles">
+      <div class="tile"><span class="tile-label"><span aria-hidden="true">💰</span> Income a month</span><span class="tile-value" id="tile-repeat-income">—</span></div>
+      <div class="tile"><span class="tile-label"><span aria-hidden="true">🧾</span> Payments a month</span><span class="tile-value" id="tile-repeat-expense">—</span></div>
+      <div class="tile"><span class="tile-label"><span aria-hidden="true">⚖️</span> Left over</span><span class="tile-value" id="tile-repeat-net">—</span><span class="tile-foot">before anything else</span></div>
+    </div>
+
+    <form id="repeat-form" class="card form">
+      <fieldset class="field">
+        <legend>What repeats?</legend>
+        <div class="choices" id="repeat-kind">
+          <label class="choice"><input type="radio" name="kind" value="income" checked /><span><span aria-hidden="true">💰</span> Income</span></label>
+          <label class="choice"><input type="radio" name="kind" value="expense" /><span><span aria-hidden="true">🧾</span> Payment</span></label>
+        </div>
+      </fieldset>
+      <div class="grid">
+        <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" placeholder="8000" required />
+          <span class="quick" data-quick="repeat"></span></label>
+        <label class="field">Day of the month <input type="number" name="day" min="1" max="31" value="1" required />
+          <span class="muted small">The 31st falls back to the last day in shorter months.</span></label>
+      </div>
+      <fieldset class="field">
+        <legend id="repeat-account-legend">Received in</legend>
+        <div class="chips" id="repeat-accounts"></div>
+      </fieldset>
+      <fieldset class="field">
+        <legend>Category</legend>
+        <div class="chips" id="repeat-categories"></div>
+      </fieldset>
+      <div class="grid">
+        <label class="field">Starts <input type="month" name="startMonth" required /></label>
+        <label class="field">Ends (optional) <input type="month" name="endMonth" /></label>
+      </div>
+      <label class="field">Note <input type="text" name="note" maxlength="200" placeholder="Monthly salary" /></label>
+      <button class="primary" type="submit">Save repeat</button>
+      <p class="form-msg" id="repeat-msg"></p>
+    </form>
+
+    <div class="panel">
+      <h3><span aria-hidden="true">🔁</span> Standing rules <span class="pill" id="repeat-count">0</span></h3>
+      <div id="repeat-list"></div>
+    </div>
   </section>
 
   <!-- FRIENDS -->

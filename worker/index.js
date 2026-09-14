@@ -11,7 +11,10 @@ import {
   LOAN_DIRECTIONS,
   LOAN_SOURCES,
   accountForMethod,
+  addMonths,
+  dueDate,
   loanFlow,
+  monthsFrom,
   loanStatus,
   monthKey,
   monthLabel,
@@ -20,6 +23,7 @@ import {
   today,
   validateEntry,
   validateLoan,
+  validateRecurring,
   validateRepayment,
 } from "./summary.js";
 
@@ -192,6 +196,69 @@ async function availableMonths(db) {
 }
 
 // -------------------------------------------------------------------
+// RECURRING ENTRIES
+// -------------------------------------------------------------------
+/**
+ * Write the entries every standing rule owes, from the month it starts up to
+ * next month, and remember which months have been written so an entry deleted
+ * by hand does not come back.
+ */
+async function runRecurring(db) {
+  const horizon = addMonths(monthKey(today()), 1);
+  const [rules, runs] = await db.batch([
+    db.prepare("SELECT * FROM recurring WHERE active = 1"),
+    db.prepare("SELECT recurring_id, month FROM recurring_run"),
+  ]);
+  if (!rules.results.length) return 0;
+
+  const done = new Set(runs.results.map((row) => `${row.recurring_id}:${row.month}`));
+  let written = 0;
+
+  for (const rule of rules.results) {
+    const last = rule.end_month && rule.end_month < horizon ? rule.end_month : horizon;
+    for (const month of monthsFrom(rule.start_month, last)) {
+      if (done.has(`${rule.id}:${month}`)) continue;
+
+      const table = rule.kind === "income" ? "income" : "expense";
+      const field = rule.kind === "income" ? "account" : "method";
+      const date = dueDate(month, rule.day);
+      const entry = await db
+        .prepare(
+          `INSERT INTO ${table} (date, month, amount, ${field}, category, note, recur_ref)` +
+            " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        )
+        .bind(date, month, rule.amount, rule.account, rule.category, rule.note, `recurring:${rule.id}`)
+        .run();
+
+      await db
+        .prepare("INSERT OR IGNORE INTO recurring_run (recurring_id, month, entry_id) VALUES (?1, ?2, ?3)")
+        .bind(rule.id, month, entry.meta.last_row_id)
+        .run();
+      written += 1;
+    }
+  }
+  return written;
+}
+
+async function listRecurring(db) {
+  const { results } = await db
+    .prepare("SELECT * FROM recurring ORDER BY kind DESC, day ASC, id DESC")
+    .all();
+  const next = addMonths(monthKey(today()), 1);
+  return {
+    rules: results.map((rule) => ({
+      ...rule,
+      active: Boolean(rule.active),
+      nextDate: !rule.active || (rule.end_month && rule.end_month < next) ? null : dueDate(next, rule.day),
+    })),
+    totals: {
+      income: results.filter((r) => r.kind === "income" && r.active).reduce((a, r) => a + Number(r.amount), 0),
+      expense: results.filter((r) => r.kind === "expense" && r.active).reduce((a, r) => a + Number(r.amount), 0),
+    },
+  };
+}
+
+// -------------------------------------------------------------------
 // LOANS AS ENTRIES
 // -------------------------------------------------------------------
 // Money moving with a friend is booked as an ordinary entry, so the dashboard
@@ -325,6 +392,11 @@ async function handleApi(request, env, url) {
   const path = url.pathname.replace(/^\/api\/?/, "");
   const method = request.method.toUpperCase();
 
+  // Anything standing due since the last visit is written before we answer.
+  if (method === "GET" && (path === "bootstrap" || path.startsWith("month/"))) {
+    await runRecurring(db);
+  }
+
   // GET /api/bootstrap - the choices the forms offer, plus known months.
   if (method === "GET" && path === "bootstrap") {
     return json({
@@ -429,6 +501,70 @@ async function handleApi(request, env, url) {
         .run();
     }
     return json({ summary: await monthSummary(db, month) });
+  }
+
+  // ---------------- standing income and payments ----------------
+  if (method === "GET" && path === "recurring") {
+    return json(await listRecurring(db));
+  }
+
+  if (method === "POST" && path === "recurring") {
+    const rule = validateRecurring(await readJson(request));
+    const result = await db
+      .prepare(
+        "INSERT INTO recurring (kind, amount, account, category, note, day, start_month, end_month, active)" +
+          " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+      )
+      .bind(
+        rule.kind,
+        rule.amount,
+        rule.account,
+        rule.category,
+        rule.note,
+        rule.day,
+        rule.startMonth,
+        rule.endMonth,
+        rule.active,
+      )
+      .run();
+    const written = await runRecurring(db);
+    return json({ id: result.meta.last_row_id, rule, written, ...(await listRecurring(db)) }, 201);
+  }
+
+  const ruleEdit = path.match(/^recurring\/(\d+)$/);
+  if (method === "PATCH" && ruleEdit) {
+    const id = Number(ruleEdit[1]);
+    const rule = validateRecurring(await readJson(request));
+    const result = await db
+      .prepare(
+        "UPDATE recurring SET kind = ?1, amount = ?2, account = ?3, category = ?4, note = ?5," +
+          " day = ?6, start_month = ?7, end_month = ?8, active = ?9 WHERE id = ?10",
+      )
+      .bind(
+        rule.kind,
+        rule.amount,
+        rule.account,
+        rule.category,
+        rule.note,
+        rule.day,
+        rule.startMonth,
+        rule.endMonth,
+        rule.active,
+        id,
+      )
+      .run();
+    if (!result.meta.changes) return fail("That repeat no longer exists.", 404);
+    await runRecurring(db);
+    return json({ id, rule, ...(await listRecurring(db)) });
+  }
+
+  // Stops the rule. Entries it already wrote stay: they really happened.
+  if (method === "DELETE" && ruleEdit) {
+    const id = Number(ruleEdit[1]);
+    await db.prepare("DELETE FROM recurring_run WHERE recurring_id = ?1").bind(id).run();
+    const result = await db.prepare("DELETE FROM recurring WHERE id = ?1").bind(id).run();
+    if (!result.meta.changes) return fail("That repeat no longer exists.", 404);
+    return json({ deleted: id, ...(await listRecurring(db)) });
   }
 
   // ---------------- money lent to friends ----------------

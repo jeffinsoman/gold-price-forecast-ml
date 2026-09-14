@@ -3,6 +3,9 @@ import { test } from "node:test";
 
 import {
   accountForMethod,
+  addMonths,
+  dueDate,
+  monthsFrom,
   isIsoDate,
   loanFlow,
   loanStatus,
@@ -12,6 +15,7 @@ import {
   summarize,
   validateEntry,
   validateLoan,
+  validateRecurring,
   validateRepayment,
 } from "../worker/summary.js";
 
@@ -270,4 +274,57 @@ test("each direction moves money the opposite way", () => {
     /Repaid from/,
   );
   assert.equal(loanStatus(2000, 500, "borrowed").status, "Partly paid back");
+});
+
+test("months shift and list correctly", () => {
+  assert.equal(addMonths("2026-12", 1), "2027-01");
+  assert.equal(addMonths("2026-01", -1), "2025-12");
+  assert.equal(addMonths("2026-09", 0), "2026-09");
+  assert.deepEqual(monthsFrom("2026-08", "2026-11"), ["2026-08", "2026-09", "2026-10", "2026-11"]);
+  assert.deepEqual(monthsFrom("2026-09", "2026-09"), ["2026-09"]);
+  assert.deepEqual(monthsFrom("2026-10", "2026-09"), []);
+});
+
+test("a repeat due on the 31st falls back to the last day of short months", () => {
+  assert.equal(dueDate("2026-10", 31), "2026-10-31");
+  assert.equal(dueDate("2026-09", 31), "2026-09-30");
+  assert.equal(dueDate("2027-02", 30), "2027-02-28");
+  assert.equal(dueDate("2028-02", 31), "2028-02-29");
+  assert.equal(dueDate("2026-09", 1), "2026-09-01");
+});
+
+test("repeats are validated", () => {
+  const rule = validateRecurring({
+    kind: "income",
+    amount: "8000",
+    account: "Bank",
+    category: "Salary",
+    day: 1,
+    startMonth: "2026-09",
+    note: "  Monthly salary  ",
+  });
+  assert.deepEqual(rule, {
+    kind: "income",
+    amount: 8000,
+    account: "Bank",
+    category: "Salary",
+    day: 1,
+    startMonth: "2026-09",
+    endMonth: null,
+    note: "Monthly salary",
+    active: 1,
+  });
+
+  assert.throws(() => validateRecurring({ kind: "savings", amount: 1, account: "Bank", day: 1, startMonth: "2026-09" }), /income or expense/);
+  assert.throws(() => validateRecurring({ kind: "income", amount: 1, account: "Credit Card", day: 1, startMonth: "2026-09" }), /Account must be/);
+  assert.throws(() => validateRecurring({ kind: "expense", amount: 1, account: "Cash", day: 0, startMonth: "2026-09" }), /Day must be/);
+  assert.throws(() => validateRecurring({ kind: "expense", amount: 1, account: "Cash", day: 32, startMonth: "2026-09" }), /Day must be/);
+  assert.throws(() => validateRecurring({ kind: "expense", amount: 1, account: "Cash", day: 5, startMonth: "sept" }), /Starting month/);
+  assert.throws(
+    () => validateRecurring({ kind: "expense", amount: 1, account: "Cash", day: 5, startMonth: "2026-09", endMonth: "2026-08" }),
+    /cannot be before/,
+  );
+
+  // An expense may be charged to a card; income cannot land on one.
+  assert.equal(validateRecurring({ kind: "expense", amount: 350, account: "Credit Card", category: "Bills", day: 5, startMonth: "2026-09" }).account, "Credit Card");
 });

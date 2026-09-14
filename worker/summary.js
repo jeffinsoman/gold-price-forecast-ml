@@ -83,6 +83,33 @@ export function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Shift a month key by whole months: addMonths("2026-12", 1) -> "2027-01". */
+export function addMonths(key, count) {
+  const [year, month] = String(key).split("-").map(Number);
+  const total = year * 12 + (month - 1) + count;
+  return `${String(Math.floor(total / 12)).padStart(4, "0")}-${String((total % 12) + 1).padStart(2, "0")}`;
+}
+
+/** Every month from `start` to `end` inclusive, oldest first. */
+export function monthsFrom(start, end) {
+  const months = [];
+  for (let key = start; key <= end; key = addMonths(key, 1)) {
+    months.push(key);
+    if (months.length > 240) break;
+  }
+  return months;
+}
+
+/**
+ * The date a rule falls due in a month, with the day pulled back to the last of
+ * the month when it does not exist — the 31st in September is the 30th.
+ */
+export function dueDate(month, day) {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  return `${month}-${String(Math.min(Number(day), lastDay)).padStart(2, "0")}`;
+}
+
 /** The `count` months ending at `key`, oldest first. */
 export function recentMonths(key, count = 6) {
   let [year, month] = String(key).split("-").map(Number);
@@ -195,6 +222,50 @@ export function validateRepayment(body, outstanding, direction = "lent") {
     amount: rounded,
     receivedIn,
     note: String(body?.note ?? "").trim().slice(0, 200),
+  };
+}
+
+/** Reject anything that would put junk in the recurring table. Returns a clean rule. */
+export function validateRecurring(body) {
+  const kind = String(body?.kind ?? "").trim();
+  if (kind !== "income" && kind !== "expense") throw new Error("Kind must be income or expense.");
+
+  const amount = Number(body?.amount);
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be greater than zero.");
+
+  const isIncome = kind === "income";
+  const allowed = isIncome ? INCOME_ACCOUNTS : EXPENSE_METHODS;
+  const account = String(body?.account ?? "").trim();
+  if (!allowed.includes(account)) {
+    throw new Error(`${isIncome ? "Account" : "Payment method"} must be one of ${allowed.join(", ")}.`);
+  }
+
+  const day = Number(body?.day);
+  if (!Number.isInteger(day) || day < 1 || day > 31) throw new Error("Day must be between 1 and 31.");
+
+  const startMonth = String(body?.startMonth ?? "").trim();
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(startMonth)) throw new Error("Starting month must look like 2026-09.");
+
+  const endMonth = String(body?.endMonth ?? "").trim();
+  if (endMonth && !/^\d{4}-(0[1-9]|1[0-2])$/.test(endMonth)) {
+    throw new Error("Ending month must look like 2026-09.");
+  }
+  if (endMonth && endMonth < startMonth) throw new Error("The ending month cannot be before the start.");
+
+  const categories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+  let category = String(body?.category ?? "").trim() || "Other";
+  if (!categories.includes(category)) category = "Other";
+
+  return {
+    kind,
+    amount: Math.round(amount * 100) / 100,
+    account,
+    category,
+    day,
+    startMonth,
+    endMonth: endMonth || null,
+    note: String(body?.note ?? "").trim().slice(0, 200),
+    active: body?.active === undefined ? 1 : Number(Boolean(body.active)),
   };
 }
 

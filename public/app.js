@@ -247,6 +247,12 @@ function entryTable(rows, kind, { actions = false, onDelete, onEdit } = {}) {
       if (row.loan_ref) {
         // Written by a loan: it changes on the Friends page, not here.
         cell.innerHTML = '<span class="tag">🤝 loan</span>';
+      } else if (row.recur_ref) {
+        cell.append(
+          Object.assign(document.createElement("span"), { className: "tag", textContent: "🔁" }),
+          linkButton("Edit", () => onEdit(row)),
+          linkButton("Delete", () => onDelete(row.id), "danger"),
+        );
       } else {
         cell.append(
           linkButton("Edit", () => onEdit(row)),
@@ -317,6 +323,26 @@ const FIELD_SETS = {
     },
     { type: "text", name: "note", label: "Note", value: row.note },
   ],
+  recurring: (row) => [
+    { type: "number", name: "amount", label: "Amount", value: row.amount },
+    { type: "number", name: "day", label: "Day of the month", value: row.day },
+    {
+      type: "radio",
+      name: "account",
+      label: row.kind === "income" ? "Received in" : "Paid by",
+      values: row.kind === "income" ? state.options.incomeAccounts : state.options.expenseMethods,
+      value: row.account,
+    },
+    {
+      type: "chips",
+      name: "category",
+      label: "Category",
+      values: row.kind === "income" ? state.options.incomeCategories : state.options.expenseCategories,
+      value: row.category,
+    },
+    { type: "month", name: "endMonth", label: "Ends (optional)", value: row.end_month ?? "" },
+    { type: "text", name: "note", label: "Note", value: row.note },
+  ],
   repayment: (row) => [
     { type: "date", name: "date", label: "Date", value: row.date },
     { type: "number", name: "amount", label: "Amount", value: row.amount },
@@ -373,8 +399,9 @@ function openEdit({ title, kind, row, onSave }) {
       input.name = field.name;
       input.value = field.value ?? "";
       if (field.type === "number") {
-        input.min = "0.01";
-        input.step = "0.01";
+        input.min = field.name === "day" ? "1" : "0.01";
+        input.step = field.name === "day" ? "1" : "0.01";
+        if (field.name === "day") input.max = "31";
       }
       label.append(input);
     }
@@ -523,6 +550,154 @@ function drawTrend(trend) {
     });
     container.append(cell);
   }
+}
+
+// -------------------------------------------------------------------
+// REPEATING ENTRIES
+// -------------------------------------------------------------------
+async function loadRepeats() {
+  const data = await api("/recurring");
+  setAmount($("tile-repeat-income"), data.totals.income);
+  setAmount($("tile-repeat-expense"), data.totals.expense);
+  setAmount($("tile-repeat-net"), data.totals.income - data.totals.expense);
+  $("repeat-count").textContent = data.rules.length;
+  $("repeat-list").replaceChildren(
+    ...(data.rules.length ? data.rules.map(repeatCard) : [empty("Nothing repeats yet.")]),
+  );
+}
+
+const ordinal = (day) => {
+  const suffix = day % 10 === 1 && day !== 11 ? "st" : day % 10 === 2 && day !== 12 ? "nd" : day % 10 === 3 && day !== 13 ? "rd" : "th";
+  return `${day}${suffix}`;
+};
+
+function repeatCard(rule) {
+  const income = rule.kind === "income";
+  const card = document.createElement("div");
+  card.className = `loan ${income ? "lent" : "borrowed"} ${rule.active ? "" : "settled"}`;
+
+  const head = document.createElement("div");
+  head.className = "loan-head";
+  head.innerHTML =
+    `<div><span class="loan-name"><span aria-hidden="true">${icon(rule.category)}</span> ${rule.note || rule.category}</span>` +
+    `<span class="tag ${rule.active ? "" : "due"}">${rule.active ? "on" : "paused"}</span>` +
+    `<p class="muted small">${income ? "Into" : "From"} ${icon(rule.account)} ${rule.account} · every month on the ${ordinal(rule.day)}` +
+    `${rule.end_month ? ` · until ${monthLabel(rule.end_month)}` : ""}` +
+    `${rule.nextDate ? ` · next ${dayLabel(rule.nextDate)}` : ""}</p></div>` +
+    `<div class="loan-amount"><strong>${income ? "+" : "−"}${money(rule.amount)}</strong>` +
+    `<span class="muted small">a month</span></div>`;
+  card.append(head);
+
+  const send = (body) => api(`/recurring/${rule.id}`, { method: "PATCH", body: JSON.stringify(body) });
+  const base = {
+    kind: rule.kind,
+    amount: rule.amount,
+    account: rule.account,
+    category: rule.category,
+    note: rule.note,
+    day: rule.day,
+    startMonth: rule.start_month,
+    endMonth: rule.end_month,
+    active: rule.active,
+  };
+
+  const actions = document.createElement("div");
+  actions.className = "row wrap loan-actions";
+  actions.append(
+    linkButton(rule.active ? "Pause" : "Resume", async () => {
+      await send({ ...base, active: !rule.active });
+      toast(rule.active ? "Paused. Nothing more will be written." : "Back on.");
+      await refreshAll();
+    }),
+    linkButton("Edit", () =>
+      openEdit({
+        title: `Edit ${rule.note || rule.category}`,
+        kind: "recurring",
+        row: rule,
+        onSave: async (body) => {
+          await send({ ...base, ...body, day: Number(body.day), endMonth: body.endMonth || null });
+          toast("Repeat updated.");
+          await refreshAll();
+        },
+      }),
+    ),
+    linkButton("Delete", async () => {
+      await api(`/recurring/${rule.id}`, { method: "DELETE" });
+      toast("Repeat removed. Entries it already wrote stay.");
+      await refreshAll();
+    }, "danger"),
+  );
+  card.append(actions);
+  return card;
+}
+
+function bindRepeatForm() {
+  const form = $("repeat-form");
+  form.startMonth.value = state.currentMonth;
+
+  const kind = () => form.querySelector('input[name="kind"]:checked').value;
+  const applyKind = () => {
+    const income = kind() === "income";
+    $("repeat-account-legend").textContent = income ? "Received in" : "Paid by";
+    fillChips($("repeat-accounts"), income ? state.options.incomeAccounts : state.options.expenseMethods, "account");
+    fillChips($("repeat-categories"), income ? state.options.incomeCategories : state.options.expenseCategories, "category");
+  };
+  form.querySelectorAll('input[name="kind"]').forEach((radio) => radio.addEventListener("change", applyKind));
+  applyKind();
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const body = {
+      kind: kind(),
+      amount: form.amount.value,
+      day: Number(form.day.value),
+      account: form.querySelector('input[name="account"]:checked')?.value,
+      category: form.querySelector('input[name="category"]:checked')?.value,
+      startMonth: form.startMonth.value,
+      endMonth: form.endMonth.value || null,
+      note: form.note.value,
+    };
+    try {
+      const result = await api("/recurring", { method: "POST", body: JSON.stringify(body) });
+      const text = `🔁 ${money(result.rule.amount)} every month on the ${ordinal(result.rule.day)}${result.written ? `, ${result.written} entr${result.written === 1 ? "y" : "ies"} written` : ""}.`;
+      message($("repeat-msg"), text);
+      toast(text);
+      form.reset();
+      form.startMonth.value = state.currentMonth;
+      form.day.value = 1;
+      applyKind();
+      await refreshAll();
+    } catch (error) {
+      message($("repeat-msg"), error.message, false);
+    }
+  });
+}
+
+/** The "repeat this every month" tick under the add forms. */
+async function maybeRepeat(form, entry, kind) {
+  if (!form.repeat?.checked) return;
+  const day = Number(entry.date.slice(8, 10));
+  await api("/recurring", {
+    method: "POST",
+    body: JSON.stringify({
+      kind,
+      amount: entry.amount,
+      day,
+      account: kind === "income" ? entry.account : entry.method,
+      category: entry.category,
+      // This month is already booked by the entry itself.
+      startMonth: addMonths(entry.month, 1),
+      note: entry.note,
+    }),
+  });
+  form.repeat.checked = false;
+  toast(`🔁 Repeating ${money(entry.amount)} on the ${ordinal(day)} of each month.`);
+}
+
+function addMonths(key, count) {
+  const [year, month] = key.split("-").map(Number);
+  const total = year * 12 + (month - 1) + count;
+  return `${String(Math.floor(total / 12)).padStart(4, "0")}-${String((total % 12) + 1).padStart(2, "0")}`;
 }
 
 // -------------------------------------------------------------------
@@ -753,6 +928,7 @@ async function refreshAll() {
   await loadDashboard(state.months.includes(state.dashMonth) ? state.dashMonth : state.currentMonth);
   if (state.txMonth) await loadTransactions(state.txMonth);
   await loadFriends();
+  await loadRepeats();
   await refreshRecent();
 }
 
@@ -773,6 +949,7 @@ function bindIncomeForm() {
       const text = `${icon(result.entry.account)} Saved ${money(result.entry.amount)} into ${result.entry.account} on ${dayLabel(result.entry.date)}.`;
       message($("income-msg"), text);
       toast(text);
+      await maybeRepeat(form, result.entry, "income");
       form.reset();
       form.date.value = state.today;
       await refreshAll();
@@ -815,6 +992,7 @@ function bindExpenseForm() {
       const text = `${icon(result.entry.method)} Saved ${money(result.entry.amount)} by ${result.entry.method} on ${dayLabel(result.entry.date)}.`;
       message($("expense-msg"), `${text} ${s.label}: ${s.status} — ${s.statusMessage}.`, !s.isOverBudget);
       toast(`${text} ${s.statusMessage}.`, s.isOverBudget ? "bad" : "ok");
+      await maybeRepeat(form, result.entry, "expense");
       form.amount.value = "";
       form.note.value = "";
       await refreshAll();
@@ -908,6 +1086,7 @@ function bindTabs() {
     if (tab.dataset.page === "transactions") await loadTransactions(state.txMonth || state.currentMonth);
     if (tab.dataset.page === "dashboard") await loadDashboard(state.dashMonth || state.currentMonth);
     if (tab.dataset.page === "friends") await loadFriends();
+    if (tab.dataset.page === "repeat") await loadRepeats();
     if (tab.dataset.page === "income" || tab.dataset.page === "expense") await refreshRecent();
   });
 }
@@ -947,6 +1126,7 @@ async function boot() {
   fillQuick(document.querySelector('[data-quick="income"]'), $("income-form").amount);
   fillQuick(document.querySelector('[data-quick="expense"]'), $("expense-form").amount);
   fillQuick(document.querySelector('[data-quick="loan"]'), $("loan-form").amount);
+  fillQuick(document.querySelector('[data-quick="repeat"]'), $("repeat-form").amount);
 
   bindTabs();
   bindCurrency();
@@ -954,6 +1134,7 @@ async function boot() {
   bindIncomeForm();
   bindExpenseForm();
   bindLoanForm();
+  bindRepeatForm();
   bindBudget();
 
   $("dash-month").addEventListener("change", (event) => loadDashboard(event.target.value));
@@ -961,6 +1142,7 @@ async function boot() {
 
   await loadDashboard(state.currentMonth);
   await loadFriends();
+  await loadRepeats();
   await refreshRecent();
 }
 

@@ -298,3 +298,7 @@ h3 { display: flex; align-items: center; gap: 7px; }
 .loan.lent { border-left: 3px solid var(--blue); }
 .loan.settled { border-left-color: var(--green); }
 .loan.borrowed .repayments li { border-left-color: #f59e0b; }
+
+/* "Repeat this" tick */
+.check { display: flex; align-items: center; gap: 9px; font-size: 0.88rem; cursor: pointer; }
+.check input { width: 18px; height: 18px; accent-color: var(--blue); }
