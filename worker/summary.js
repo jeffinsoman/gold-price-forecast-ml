@@ -21,6 +21,14 @@ export function loanFlow(direction) {
     : { openLabel: "Paid from", openValues: LOAN_SOURCES, backLabel: "Received in", backValues: ACCOUNTS };
 }
 
+// Categories the app writes itself when money moves with a friend.
+export const LOAN_CATEGORY = {
+  lent: "Lent out",
+  borrowed: "Borrowed",
+  returned: "Loan returned",
+  repaid: "Loan repaid",
+};
+
 export const INCOME_CATEGORIES = [
   "Salary",
   "Business",
@@ -225,8 +233,6 @@ export function summarize({
   expenseUpcoming = 0,
   customBudget = null,
   carriedForward = 0,
-  loanIn = 0,
-  loanOut = 0,
 }) {
   const incomeTotal = sum(incomeByAccount);
   const expenseTotal = sum(expenseByMethod);
@@ -234,23 +240,17 @@ export function summarize({
   // What last month left behind, and what this month has to work with.
   const opening = Math.round((Number(carriedForward) || 0) * 100) / 100;
 
-  // Money lent out is gone until it comes back, and money borrowed is in hand
-  // until it is paid back, so both sit alongside income and expense.
-  const moneyIn = Number(loanIn) || 0;    // borrowed, plus repayments from friends
-  const moneyOut = Number(loanOut) || 0;  // lent out, plus what you paid back
-  const available = opening + incomeTotal + moneyIn;
-  const spent = expenseTotal + moneyOut;
-
-  // The balance is what is genuinely left, and it is exactly what the next
-  // month opens with.
-  const balance = available - spent;
+  // Lending and borrowing are booked as ordinary expense and income entries, so
+  // they are already inside these totals.
+  const available = opening + incomeTotal;
+  const balance = available - expenseTotal;
 
   const budgetIsCustom = customBudget !== null && customBudget !== undefined;
   const budget = budgetIsCustom ? Number(customBudget) : available;
 
-  const hasEntries = incomeTotal > 0 || expenseTotal > 0 || moneyIn > 0 || moneyOut > 0;
-  const isOverBudget = hasEntries && spent > budget;
-  const remaining = budget - spent;
+  const hasEntries = incomeTotal > 0 || expenseTotal > 0;
+  const isOverBudget = hasEntries && expenseTotal > budget;
+  const remaining = budget - expenseTotal;
   const overBy = Math.max(0, -remaining);
 
   let status = "NO ENTRIES";
@@ -264,8 +264,8 @@ export function summarize({
   }
 
   let budgetUsedPct = 0;
-  if (budget > 0) budgetUsedPct = (spent / budget) * 100;
-  else if (spent > 0) budgetUsedPct = 100;
+  if (budget > 0) budgetUsedPct = (expenseTotal / budget) * 100;
+  else if (expenseTotal > 0) budgetUsedPct = 100;
 
   return {
     month,
@@ -277,9 +277,6 @@ export function summarize({
     balance,
     carriedForward: opening,
     available,
-    loanIn: moneyIn,
-    loanOut: moneyOut,
-    spent,
     budget,
     budgetIsCustom,
     budgetUsedPct,

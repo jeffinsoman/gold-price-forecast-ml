@@ -117,13 +117,12 @@ Every month opens with what the previous one left over, and the balance is that 
 takings less its spending:
 
 ```
-carried forward + money in - money out = balance left   →   opens the next month
-        659     +   8,947  -    7,810  =     1,796
+carried forward + income - expense = balance left   →   opens the next month
+        659     +  8,947 -   7,810 =     1,796
 ```
 
-Money in is income plus anything borrowed or repaid to you; money out is spending plus anything you
-lend or pay back. Lend 500 in August and the balance drops by 500 that month — the cash is not with
-you — and it only reappears when the friend pays it back.
+Nothing else feeds that line. Money moving with a friend reaches it the ordinary way, as an income or
+expense entry — see below.
 
 That balance is also what the month is measured against: with no custom budget the limit is
 `carried forward + income`, so the card reads IN CONTROL while the balance is positive and OUT OF
@@ -158,8 +157,20 @@ back* when you are the borrower). A repayment can never exceed what is outstandi
 be edited below what has already moved.
 
 Three tiles keep the score: **they owe you**, **you owe**, and the **net position** between them.
-Both sides feed the account balances in **What you hold now**, and both move the month's balance:
-lending and paying back a debt count as money out, borrowing and being repaid count as money in.
+
+Every movement writes a real entry, so the dashboard needs no special rule for loans:
+
+| What happened | Booked as | Category |
+| --- | --- | --- |
+| You lend money out | **Expense**, paid by the account it left | `Lent out` |
+| A friend pays you back | **Income**, into the account it arrived in | `Loan returned` |
+| You borrow money | **Income**, into the account it arrived in | `Borrowed` |
+| You pay a debt back | **Expense**, paid by the account it left | `Loan repaid` |
+
+Lend 500 from Cash in August and August's expense goes up by 500 — the cash is not with you — and the
+balance only recovers when the repayment lands as income. These entries are marked `🤝 loan` in
+History and are edited from the Friends page, not in place: editing a loan rewrites its entry and
+deleting one takes its entries with it.
 
 ### Using it
 Every account, payment method and category carries a symbol, and the pages are built to be tapped

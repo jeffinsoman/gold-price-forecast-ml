@@ -7,6 +7,7 @@ import {
   EXPENSE_METHODS,
   INCOME_ACCOUNTS,
   INCOME_CATEGORIES,
+  LOAN_CATEGORY,
   LOAN_DIRECTIONS,
   LOAN_SOURCES,
   accountForMethod,
@@ -64,39 +65,19 @@ function totalsFrom(rows, key, field = "total") {
 // -------------------------------------------------------------------
 // MONTH QUERIES
 // -------------------------------------------------------------------
-// Money that came in / went out through loans, for one month or for everything
-// before it. Lending it out is money you no longer hold; a repayment brings it
-// back. Borrowing is the mirror.
-const LOAN_IN = (op) =>
-  `COALESCE((SELECT SUM(amount) FROM loan WHERE month ${op} ?1 AND direction = 'borrowed'), 0)` +
-  ` + COALESCE((SELECT SUM(r.amount) FROM loan_repayment r JOIN loan l ON l.id = r.loan_id` +
-  ` WHERE r.month ${op} ?1 AND l.direction = 'lent'), 0)`;
-
-const LOAN_OUT = (op) =>
-  `COALESCE((SELECT SUM(amount) FROM loan WHERE month ${op} ?1 AND direction = 'lent'), 0)` +
-  ` + COALESCE((SELECT SUM(r.amount) FROM loan_repayment r JOIN loan l ON l.id = r.loan_id` +
-  ` WHERE r.month ${op} ?1 AND l.direction = 'borrowed'), 0)`;
-
-/** What every earlier month left behind, loans included. */
+/**
+ * What every earlier month left behind: income minus expense, all time before
+ * `month`. Loans are in there already, booked as entries when they happen.
+ */
 async function carriedForward(db, month) {
   const row = await db
     .prepare(
       "SELECT COALESCE((SELECT SUM(amount) FROM income WHERE month < ?1), 0)" +
-        " - COALESCE((SELECT SUM(amount) FROM expense WHERE month < ?1), 0)" +
-        ` + (${LOAN_IN("<")}) - (${LOAN_OUT("<")}) AS carried`,
+        " - COALESCE((SELECT SUM(amount) FROM expense WHERE month < ?1), 0) AS carried",
     )
     .bind(month)
     .first();
   return Number(row?.carried) || 0;
-}
-
-/** The loan money moving in and out during one month. */
-async function loanFlows(db, month) {
-  const row = await db
-    .prepare(`SELECT (${LOAN_IN("=")}) AS moved_in, (${LOAN_OUT("=")}) AS moved_out`)
-    .bind(month)
-    .first();
-  return { loanIn: Number(row?.moved_in) || 0, loanOut: Number(row?.moved_out) || 0 };
 }
 
 async function monthSummary(db, month) {
@@ -125,7 +106,6 @@ async function monthSummary(db, month) {
     expenseUpcoming: Number(totals.upcoming),
     customBudget: custom ? Number(custom.amount) : null,
     carriedForward: await carriedForward(db, month),
-    ...(await loanFlows(db, month)),
   });
 }
 
@@ -134,48 +114,23 @@ async function monthSummary(db, month) {
  * Money lent out has left the account; money repaid has come back into one.
  */
 async function accountBalances(db, month) {
-  const [income, expense, loans, repaid] = await db.batch([
+  const [income, expense] = await db.batch([
     db.prepare("SELECT account, SUM(amount) AS total FROM income WHERE month <= ?1 GROUP BY account").bind(month),
     db.prepare("SELECT method, SUM(amount) AS total FROM expense WHERE month <= ?1 GROUP BY method").bind(month),
-    db
-      .prepare("SELECT direction, paid_from, SUM(amount) AS total FROM loan WHERE month <= ?1 GROUP BY direction, paid_from")
-      .bind(month),
-    db
-      .prepare(
-        "SELECT l.direction, r.received_in, SUM(r.amount) AS total FROM loan_repayment r" +
-          " JOIN loan l ON l.id = r.loan_id WHERE r.month <= ?1 GROUP BY l.direction, r.received_in",
-      )
-      .bind(month),
   ]);
 
   const inBy = totalsFrom(income.results, "account");
   const outBy = totalsFrom(expense.results, "method");
 
+  // Loans already moved through these entries, so nothing extra to apply here.
   const balances = {};
   for (const account of ACCOUNTS) balances[account] = inBy[account] ?? 0;
-  let cardSpend = outBy["Credit Card"] ?? 0;
-
-  // Spending draws an account down; Credit Card is a bill, not an account.
   for (const [method, total] of Object.entries(outBy)) {
     const account = accountForMethod(method);
     if (account) balances[account] -= total;
   }
 
-  const move = (name, total, outwards) => {
-    // Lending and repaying a debt take money out; borrowing and being repaid bring it in.
-    const account = ACCOUNTS.includes(name) ? name : accountForMethod(name);
-    if (account) balances[account] += outwards ? -total : total;
-    else if (name === "Credit Card" && outwards) cardSpend += total;
-  };
-
-  for (const row of loans.results) {
-    move(row.paid_from, Number(row.total), row.direction !== "borrowed");
-  }
-  for (const row of repaid.results) {
-    move(row.received_in, Number(row.total), row.direction === "borrowed");
-  }
-
-  return { balances, cardSpend };
+  return { balances, cardSpend: outBy["Credit Card"] ?? 0 };
 }
 
 async function monthTrend(db, month) {
@@ -237,6 +192,69 @@ async function availableMonths(db) {
 }
 
 // -------------------------------------------------------------------
+// LOANS AS ENTRIES
+// -------------------------------------------------------------------
+// Money moving with a friend is booked as an ordinary entry, so the dashboard
+// only ever adds up income and expense:
+//
+//   lent out          -> expense, paid by the account it left
+//   borrowed          -> income, into the account it arrived in
+//   a friend repays   -> income, into the account it arrived in
+//   you repay a debt  -> expense, paid by the account it left
+
+/** Wipe the entries a loan or repayment created, so they can be written fresh. */
+async function clearEntries(db, refs) {
+  const marks = refs.map((_, i) => `?${i + 1}`).join(", ");
+  await db.batch([
+    db.prepare(`DELETE FROM income WHERE loan_ref IN (${marks})`).bind(...refs),
+    db.prepare(`DELETE FROM expense WHERE loan_ref IN (${marks})`).bind(...refs),
+  ]);
+}
+
+async function writeEntry(db, { table, ref, date, amount, account, category, note }) {
+  const field = table === "income" ? "account" : "method";
+  await db
+    .prepare(
+      `INSERT INTO ${table} (date, month, amount, ${field}, category, note, loan_ref)` +
+        " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+    )
+    .bind(date, monthKey(date), amount, account, category, note, ref)
+    .run();
+}
+
+/** The entry a loan itself stands for: money out when lent, money in when borrowed. */
+async function syncLoanEntry(db, id, loan) {
+  const ref = `loan:${id}`;
+  await clearEntries(db, [ref]);
+  const borrowed = loan.direction === "borrowed";
+  await writeEntry(db, {
+    table: borrowed ? "income" : "expense",
+    ref,
+    date: loan.date,
+    amount: loan.amount,
+    account: loan.paidFrom,
+    category: borrowed ? LOAN_CATEGORY.borrowed : LOAN_CATEGORY.lent,
+    note: `${borrowed ? "Borrowed from" : "Lent to"} ${loan.friend}${loan.note ? ` · ${loan.note}` : ""}`,
+  });
+}
+
+/** The entry a repayment stands for: money back in, or a debt paid out. */
+async function syncRepaymentEntry(db, id, repayment, loan) {
+  const ref = `repayment:${id}`;
+  await clearEntries(db, [ref]);
+  const borrowed = loan.direction === "borrowed";
+  await writeEntry(db, {
+    table: borrowed ? "expense" : "income",
+    ref,
+    date: repayment.date,
+    amount: repayment.amount,
+    account: repayment.receivedIn,
+    category: borrowed ? LOAN_CATEGORY.repaid : LOAN_CATEGORY.returned,
+    note: `${borrowed ? "Paid back to" : "Returned by"} ${loan.friend}${repayment.note ? ` · ${repayment.note}` : ""}`,
+  });
+}
+
+// -------------------------------------------------------------------
 // LOAN QUERIES
 // -------------------------------------------------------------------
 async function listLoans(db) {
@@ -285,7 +303,7 @@ async function listLoans(db) {
 
 /** What is still owed on a loan, optionally ignoring one repayment being edited. */
 async function outstandingFor(db, loanId, ignoreRepaymentId = null) {
-  const loan = await db.prepare("SELECT amount, direction FROM loan WHERE id = ?1").bind(loanId).first();
+  const loan = await db.prepare("SELECT amount, direction, friend FROM loan WHERE id = ?1").bind(loanId).first();
   if (!loan) return null;
   const row = await db
     .prepare(
@@ -294,7 +312,7 @@ async function outstandingFor(db, loanId, ignoreRepaymentId = null) {
     .bind(loanId, ignoreRepaymentId)
     .first();
   const direction = loan.direction ?? "lent";
-  return { ...loanStatus(loan.amount, Number(row?.repaid) || 0, direction), direction };
+  return { ...loanStatus(loan.amount, Number(row?.repaid) || 0, direction), direction, friend: loan.friend };
 }
 
 // -------------------------------------------------------------------
@@ -368,6 +386,9 @@ async function handleApi(request, env, url) {
       return json({ id: result.meta.last_row_id, entry: row, summary: await monthSummary(db, row.month) }, 201);
     }
 
+    const linked = await db.prepare(`SELECT loan_ref FROM ${table} WHERE id = ?1`).bind(Number(entryEdit[2])).first();
+    if (linked?.loan_ref) return fail("This entry belongs to a loan. Change it on the Friends page.");
+
     const result = await db
       .prepare(
         `UPDATE ${table} SET date = ?1, month = ?2, amount = ?3, ${field} = ?4, category = ?5, note = ?6 WHERE id = ?7`,
@@ -381,6 +402,8 @@ async function handleApi(request, env, url) {
   // DELETE /api/income/12 | /api/expense/12
   if (method === "DELETE" && entryEdit) {
     const [, table, id] = entryEdit;
+    const linked = await db.prepare(`SELECT loan_ref FROM ${table} WHERE id = ?1`).bind(Number(id)).first();
+    if (linked?.loan_ref) return fail("This entry belongs to a loan. Change it on the Friends page.");
     const result = await db.prepare(`DELETE FROM ${table} WHERE id = ?1`).bind(Number(id)).run();
     if (!result.meta.changes) return fail("That entry no longer exists.", 404);
     return json({ deleted: Number(id) });
@@ -421,6 +444,7 @@ async function handleApi(request, env, url) {
       )
       .bind(row.friend, row.date, row.month, row.amount, row.paidFrom, row.note, row.direction)
       .run();
+    await syncLoanEntry(db, result.meta.last_row_id, row);
     return json({ id: result.meta.last_row_id, loan: row, ...(await listLoans(db)) }, 201);
   }
 
@@ -442,11 +466,14 @@ async function handleApi(request, env, url) {
       .bind(row.friend, row.date, row.month, row.amount, row.paidFrom, row.note, row.direction, id)
       .run();
     if (!result.meta.changes) return fail("That loan no longer exists.", 404);
+    await syncLoanEntry(db, id, row);
     return json({ id, loan: row, ...(await listLoans(db)) });
   }
 
   if (method === "DELETE" && loanEdit) {
     const id = Number(loanEdit[1]);
+    const { results } = await db.prepare("SELECT id FROM loan_repayment WHERE loan_id = ?1").bind(id).all();
+    await clearEntries(db, [`loan:${id}`, ...results.map((row) => `repayment:${row.id}`)]);
     await db.prepare("DELETE FROM loan_repayment WHERE loan_id = ?1").bind(id).run();
     const result = await db.prepare("DELETE FROM loan WHERE id = ?1").bind(id).run();
     if (!result.meta.changes) return fail("That loan no longer exists.", 404);
@@ -468,6 +495,7 @@ async function handleApi(request, env, url) {
       )
       .bind(loanId, row.date, row.month, row.amount, row.receivedIn, row.note)
       .run();
+    await syncRepaymentEntry(db, result.meta.last_row_id, row, { ...open, friend: open.friend });
     return json({ id: result.meta.last_row_id, repayment: row, ...(await listLoans(db)) }, 201);
   }
 
@@ -478,6 +506,7 @@ async function handleApi(request, env, url) {
     if (!existing) return fail("That repayment no longer exists.", 404);
 
     if (method === "DELETE") {
+      await clearEntries(db, [`repayment:${id}`]);
       await db.prepare("DELETE FROM loan_repayment WHERE id = ?1").bind(id).run();
       return json({ deleted: id, ...(await listLoans(db)) });
     }
@@ -489,6 +518,7 @@ async function handleApi(request, env, url) {
       .prepare("UPDATE loan_repayment SET date = ?1, month = ?2, amount = ?3, received_in = ?4, note = ?5 WHERE id = ?6")
       .bind(row.date, row.month, row.amount, row.receivedIn, row.note, id)
       .run();
+    await syncRepaymentEntry(db, id, row, open);
     return json({ id, repayment: row, ...(await listLoans(db)) });
   }
 

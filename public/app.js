@@ -24,6 +24,10 @@ const ICONS = {
   EMI: "📆",
   Entertainment: "🎬",
   Other: "📌",
+  "Lent out": "🤝",
+  Borrowed: "🙏",
+  "Loan returned": "↩️",
+  "Loan repaid": "✅",
 };
 
 const QUICK_AMOUNTS = [50, 100, 500, 1000];
@@ -240,10 +244,15 @@ function entryTable(rows, kind, { actions = false, onDelete, onEdit } = {}) {
     if (actions) {
       const cell = document.createElement("td");
       cell.className = "actions";
-      cell.append(
-        linkButton("Edit", () => onEdit(row)),
-        linkButton("Delete", () => onDelete(row.id), "danger"),
-      );
+      if (row.loan_ref) {
+        // Written by a loan: it changes on the Friends page, not here.
+        cell.innerHTML = '<span class="tag">🤝 loan</span>';
+      } else {
+        cell.append(
+          linkButton("Edit", () => onEdit(row)),
+          linkButton("Delete", () => onDelete(row.id), "danger"),
+        );
+      }
       tr.append(cell);
     }
     body.append(tr);
@@ -418,11 +427,8 @@ async function loadDashboard(month) {
   $("tile-upcoming").textContent = s.expenseUpcoming ? `${money(s.expenseUpcoming)} still due` : "";
 
   setAmount($("tile-balance"), s.balance);
-  const sum = [`${money(s.carriedForward)}`, `+ ${money(s.incomeTotal)}`];
-  if (s.loanIn) sum.push(`+ ${money(s.loanIn)} in`);
-  sum.push(`− ${money(s.expenseTotal)}`);
-  if (s.loanOut) sum.push(`− ${money(s.loanOut)} lent out`);
-  $("tile-balance-foot").textContent = `${sum.join(" ")}, opens ${nextMonthLabel(month)}`;
+  $("tile-balance-foot").textContent =
+    `${money(s.carriedForward)} + ${money(s.incomeTotal)} − ${money(s.expenseTotal)}, opens ${nextMonthLabel(month)}`;
 
   // Without a custom budget this tile would just repeat the balance.
   $("tile-budget-card").hidden = !s.budgetIsCustom;
@@ -433,7 +439,7 @@ async function loadDashboard(month) {
   meter.style.width = `${Math.min(100, s.budgetUsedPct)}%`;
   meter.classList.toggle("over", s.isOverBudget);
   $("budget-note").textContent = s.hasEntries
-    ? `${money(s.available)} available this month, ${money(s.spent)} out so far${s.loanOut ? ` (${money(s.loanOut)} of it lent or paid back)` : ""}, ${money(s.expenseUpcoming)} still to come.`
+    ? `${money(s.available)} available this month, ${money(s.expensePaid)} spent so far, ${money(s.expenseUpcoming)} still to come.`
     : `${money(s.carriedForward)} carried in. Add income and expenses to see this month take shape.`;
 
   // What you actually hold, plus what is out with friends.

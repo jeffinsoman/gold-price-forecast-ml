@@ -209,50 +209,40 @@ test("repayments cannot exceed what is outstanding", () => {
   assert.throws(() => validateRepayment({ date: "2026-09-20", amount: 100, receivedIn: "Credit Card" }, 500), /Received in/);
 });
 
-test("money lent leaves the balance until it comes back", () => {
-  // Aug: earned 1,514, spent 120, lent 500 to a friend. The 500 is not in hand.
+test("lending is an expense, so it leaves the balance until it comes back", () => {
+  // Aug: earned 1,514, spent 120, lent 500 — the loan is booked as an expense.
   const aug = summarize({
     month: "2026-08",
     incomeByAccount: { Bank: 1514 },
-    expenseByMethod: { Cash: 120 },
-    loanOut: 500,
+    expenseByMethod: { Cash: 620 },
   });
-  assert.equal(aug.spent, 620);
   assert.equal(aug.balance, 894);
   assert.equal(aug.status, "IN CONTROL");
 
-  // Sep: the friend pays it back, so it lands back in the balance.
-  const sep = summarize({ month: "2026-09", carriedForward: aug.balance, loanIn: 500 });
+  // Sep: the friend returns it, booked as income, so it comes back.
+  const sep = summarize({
+    month: "2026-09",
+    carriedForward: aug.balance,
+    incomeByAccount: { Bank: 500 },
+  });
   assert.equal(sep.carriedForward, 894);
-  assert.equal(sep.available, 1394);
   assert.equal(sep.balance, 1394);
 });
 
-test("money borrowed is in hand until it is paid back", () => {
+test("borrowing is income, and paying it back is an expense", () => {
   const sep = summarize({
     month: "2026-09",
-    incomeByAccount: { Bank: 1000 },
+    incomeByAccount: { Bank: 3000 },
     expenseByMethod: { Cash: 300 },
-    loanIn: 2000,
   });
-  assert.equal(sep.available, 3000);
   assert.equal(sep.balance, 2700);
 
-  const oct = summarize({ month: "2026-10", carriedForward: sep.balance, loanOut: 800 });
-  assert.equal(oct.spent, 800);
-  assert.equal(oct.balance, 1900);
-});
-
-test("lending more than you have goes out of budget", () => {
-  const s = summarize({
-    month: "2026-09",
-    incomeByAccount: { Bank: 1000 },
-    expenseByMethod: { Cash: 200 },
-    loanOut: 900,
+  const oct = summarize({
+    month: "2026-10",
+    carriedForward: sep.balance,
+    expenseByMethod: { Cash: 800 },
   });
-  assert.equal(s.status, "OUT OF BUDGET");
-  assert.equal(s.overBy, 100);
-  assert.equal(s.balance, -100);
+  assert.equal(oct.balance, 1900);
 });
 
 test("each direction moves money the opposite way", () => {
