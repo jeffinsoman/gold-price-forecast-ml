@@ -5,7 +5,9 @@ import {
   accountForMethod,
   addMonths,
   dueDate,
+  endMonthFor,
   monthsFrom,
+  runLength,
   isIsoDate,
   loanFlow,
   loanStatus,
@@ -327,4 +329,32 @@ test("repeats are validated", () => {
 
   // An expense may be charged to a card; income cannot land on one.
   assert.equal(validateRecurring({ kind: "expense", amount: 350, account: "Credit Card", category: "Bills", day: 5, startMonth: "2026-09" }).account, "Credit Card");
+});
+
+test("a run can be set by its number of payments", () => {
+  assert.equal(endMonthFor("2026-10", 24), "2028-09");
+  assert.equal(endMonthFor("2026-10", 1), "2026-10");
+  assert.equal(endMonthFor("2026-12", 3), "2027-02");
+  assert.throws(() => endMonthFor("2026-10", 0), /1 or more/);
+  assert.throws(() => endMonthFor("2026-10", 2.5), /1 or more/);
+
+  // Either way of saying it lands on the same month.
+  const byCount = validateRecurring({ kind: "expense", amount: 1200, account: "Bank", category: "EMI", day: 5, startMonth: "2026-10", payments: 24 });
+  const byMonth = validateRecurring({ kind: "expense", amount: 1200, account: "Bank", category: "EMI", day: 5, startMonth: "2026-10", endMonth: "2028-09" });
+  assert.equal(byCount.endMonth, byMonth.endMonth);
+});
+
+test("a run reports how far along it is", () => {
+  assert.deepEqual(runLength("2026-10", null, 3), { planned: null, written: 3, remaining: null, finished: false, progress: 0 });
+
+  const part = runLength("2026-10", "2028-09", 6);
+  assert.equal(part.planned, 24);
+  assert.equal(part.remaining, 18);
+  assert.equal(part.finished, false);
+  assert.equal(Math.round(part.progress), 25);
+
+  const done = runLength("2026-07", "2026-08", 2);
+  assert.equal(done.remaining, 0);
+  assert.equal(done.finished, true);
+  assert.equal(done.progress, 100);
 });

@@ -340,7 +340,7 @@ const FIELD_SETS = {
       values: row.kind === "income" ? state.options.incomeCategories : state.options.expenseCategories,
       value: row.category,
     },
-    { type: "month", name: "endMonth", label: "Ends (optional)", value: row.end_month ?? "" },
+    { type: "month", name: "endMonth", label: "Last month (blank for no end)", value: row.end_month ?? "" },
     { type: "text", name: "note", label: "Note", value: row.note },
   ],
   repayment: (row) => [
@@ -584,17 +584,33 @@ function repeatCard(rule) {
   const card = document.createElement("div");
   card.className = `loan ${income ? "lent" : "borrowed"} ${rule.active ? "" : "settled"}`;
 
+  const state_ = rule.finished ? "finished" : rule.active ? "on" : "paused";
   const head = document.createElement("div");
   head.className = "loan-head";
   head.innerHTML =
     `<div><span class="loan-name"><span aria-hidden="true">${icon(rule.category)}</span> ${rule.note || rule.category}</span>` +
-    `<span class="tag ${rule.active ? "" : "due"}">${rule.active ? "on" : "paused"}</span>` +
+    `<span class="tag ${state_ === "on" ? "" : "due"}">${state_}</span>` +
     `<p class="muted small">${income ? "Into" : "From"} ${icon(rule.account)} ${rule.account} · every month on the ${ordinal(rule.day)}` +
-    `${rule.end_month ? ` · until ${monthLabel(rule.end_month)}` : ""}` +
+    `${rule.end_month ? ` · until ${monthLabel(rule.end_month)}` : " · no end date"}` +
     `${rule.nextDate ? ` · next ${dayLabel(rule.nextDate)}` : ""}</p></div>` +
     `<div class="loan-amount"><strong>${income ? "+" : "−"}${money(rule.amount)}</strong>` +
     `<span class="muted small">a month</span></div>`;
   card.append(head);
+
+  // A rule with an end has a finish line worth seeing.
+  if (rule.planned) {
+    const meter = document.createElement("div");
+    meter.className = "meter";
+    meter.innerHTML = `<div class="meter-fill" style="width:${rule.progress}%"></div>`;
+    card.append(meter);
+
+    const note = document.createElement("p");
+    note.className = "muted small";
+    note.textContent = rule.remaining
+      ? `${rule.written} of ${rule.planned} done · ${rule.remaining} to go · ${money(rule.remaining * rule.amount)} left to ${income ? "come" : "pay"}`
+      : `All ${rule.planned} done.`;
+    card.append(note);
+  }
 
   const send = (body) => api(`/recurring/${rule.id}`, { method: "PATCH", body: JSON.stringify(body) });
   const base = {
@@ -644,6 +660,23 @@ function bindRepeatForm() {
   form.startMonth.value = state.currentMonth;
 
   const kind = () => form.querySelector('input[name="kind"]:checked').value;
+  const ends = () => form.querySelector('input[name="ends"]:checked').value;
+
+  // Show only the field that matches the chosen ending, and say where it lands.
+  const applyEnds = () => {
+    const choice = ends();
+    $("ends-count").hidden = choice !== "count";
+    $("ends-month").hidden = choice !== "month";
+    const count = Number(form.payments.value);
+    $("ends-hint").textContent =
+      choice === "count" && form.startMonth.value && Number.isInteger(count) && count > 0
+        ? `Last one falls in ${monthLabel(addMonths(form.startMonth.value, count - 1))}.`
+        : "";
+  };
+  form.querySelectorAll('input[name="ends"]').forEach((radio) => radio.addEventListener("change", applyEnds));
+  form.payments.addEventListener("input", applyEnds);
+  form.startMonth.addEventListener("change", applyEnds);
+  applyEnds();
   const applyKind = () => {
     const income = kind() === "income";
     $("repeat-account-legend").textContent = income ? "Received in" : "Paid by";
@@ -662,7 +695,8 @@ function bindRepeatForm() {
       account: form.querySelector('input[name="account"]:checked')?.value,
       category: form.querySelector('input[name="category"]:checked')?.value,
       startMonth: form.startMonth.value,
-      endMonth: form.endMonth.value || null,
+      endMonth: ends() === "month" ? form.endMonth.value || null : null,
+      payments: ends() === "count" ? form.payments.value : null,
       note: form.note.value,
     };
     try {
@@ -674,6 +708,7 @@ function bindRepeatForm() {
       form.startMonth.value = state.currentMonth;
       form.day.value = 1;
       applyKind();
+      applyEnds();
       await refreshAll();
     } catch (error) {
       message($("repeat-msg"), error.message, false);

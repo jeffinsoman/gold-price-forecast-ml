@@ -225,6 +225,26 @@ export function validateRepayment(body, outstanding, direction = "lent") {
   };
 }
 
+/** The last month of a run of `count` payments starting at `startMonth`. */
+export function endMonthFor(startMonth, count) {
+  const total = Number(count);
+  if (!Number.isInteger(total) || total < 1) throw new Error("Number of payments must be 1 or more.");
+  return addMonths(startMonth, total - 1);
+}
+
+/** How many months a rule covers, and how far along it is. */
+export function runLength(startMonth, endMonth, written = 0) {
+  if (!endMonth) return { planned: null, written, remaining: null, finished: false, progress: 0 };
+  const planned = monthsFrom(startMonth, endMonth).length;
+  return {
+    planned,
+    written,
+    remaining: Math.max(0, planned - written),
+    finished: written >= planned,
+    progress: planned > 0 ? Math.min(100, (written / planned) * 100) : 0,
+  };
+}
+
 /** Reject anything that would put junk in the recurring table. Returns a clean rule. */
 export function validateRecurring(body) {
   const kind = String(body?.kind ?? "").trim();
@@ -246,7 +266,11 @@ export function validateRecurring(body) {
   const startMonth = String(body?.startMonth ?? "").trim();
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(startMonth)) throw new Error("Starting month must look like 2026-09.");
 
-  const endMonth = String(body?.endMonth ?? "").trim();
+  // Either name the last month, or say how many payments there are.
+  let endMonth = String(body?.endMonth ?? "").trim();
+  if (body?.payments !== undefined && body?.payments !== null && String(body.payments).trim() !== "") {
+    endMonth = endMonthFor(startMonth, Number(body.payments));
+  }
   if (endMonth && !/^\d{4}-(0[1-9]|1[0-2])$/.test(endMonth)) {
     throw new Error("Ending month must look like 2026-09.");
   }

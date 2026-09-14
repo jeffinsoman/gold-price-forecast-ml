@@ -14,6 +14,7 @@ import {
   addMonths,
   dueDate,
   loanFlow,
+  runLength,
   monthsFrom,
   loanStatus,
   monthKey,
@@ -241,19 +242,33 @@ async function runRecurring(db) {
 }
 
 async function listRecurring(db) {
-  const { results } = await db
-    .prepare("SELECT * FROM recurring ORDER BY kind DESC, day ASC, id DESC")
-    .all();
+  const [rules, counts] = await db.batch([
+    db.prepare("SELECT * FROM recurring ORDER BY kind DESC, day ASC, id DESC"),
+    db.prepare("SELECT recurring_id, COUNT(*) AS written FROM recurring_run GROUP BY recurring_id"),
+  ]);
+  const written = totalsFrom(counts.results, "recurring_id", "written");
   const next = addMonths(monthKey(today()), 1);
+
+  const results = rules.results;
   return {
-    rules: results.map((rule) => ({
-      ...rule,
-      active: Boolean(rule.active),
-      nextDate: !rule.active || (rule.end_month && rule.end_month < next) ? null : dueDate(next, rule.day),
-    })),
+    rules: results.map((rule) => {
+      const run = runLength(rule.start_month, rule.end_month, written[rule.id] ?? 0);
+      const ended = Boolean(rule.end_month && rule.end_month < next);
+      return {
+        ...rule,
+        active: Boolean(rule.active),
+        ...run,
+        finished: run.finished && ended,
+        nextDate: !rule.active || ended ? null : dueDate(next, rule.day),
+      };
+    }),
     totals: {
-      income: results.filter((r) => r.kind === "income" && r.active).reduce((a, r) => a + Number(r.amount), 0),
-      expense: results.filter((r) => r.kind === "expense" && r.active).reduce((a, r) => a + Number(r.amount), 0),
+      income: results
+        .filter((r) => r.kind === "income" && r.active && !(r.end_month && r.end_month < next))
+        .reduce((a, r) => a + Number(r.amount), 0),
+      expense: results
+        .filter((r) => r.kind === "expense" && r.active && !(r.end_month && r.end_month < next))
+        .reduce((a, r) => a + Number(r.amount), 0),
     },
   };
 }

@@ -151,8 +151,12 @@ each month on the day you choose:
   the Credit Card; income cannot).
 * The **31st** falls back to the last day in shorter months: September gets the 30th, February the
   28th or 29th.
-* Rules can start in a past month (the missed entries are written at once), carry an optional end
-  month, and be **paused** and resumed.
+* Rules can start in a past month — the missed entries are written at once — and be **paused** and
+  resumed.
+* **Endings** are set three ways: **never**, **after N payments** (a 24-month EMI, say, which the
+  form resolves to its last month as you type), or **on a month** you pick. A finite rule shows a
+  progress bar — *8 of 24 done · 16 to go · AED 19,200 left to pay* — and once its run is over it is
+  marked **finished**, writes nothing further, and drops out of the monthly totals.
 * Entries are written up to next month, so what is coming is visible before it happens.
 * What a rule writes is an **ordinary entry**: edit one month's amount, or delete it, and the rule
   leaves it alone — a deleted month is remembered and not written again.

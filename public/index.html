@@ -190,10 +190,22 @@
         <legend>Category</legend>
         <div class="chips" id="repeat-categories"></div>
       </fieldset>
-      <div class="grid">
-        <label class="field">Starts <input type="month" name="startMonth" required /></label>
-        <label class="field">Ends (optional) <input type="month" name="endMonth" /></label>
-      </div>
+      <label class="field">Starts <input type="month" name="startMonth" required /></label>
+      <fieldset class="field">
+        <legend>When does it end?</legend>
+        <div class="choices" id="repeat-ends">
+          <label class="choice"><input type="radio" name="ends" value="never" checked /><span><span aria-hidden="true">♾️</span> Never</span></label>
+          <label class="choice"><input type="radio" name="ends" value="count" /><span><span aria-hidden="true">🔢</span> After N payments</span></label>
+          <label class="choice"><input type="radio" name="ends" value="month" /><span><span aria-hidden="true">📅</span> On a month</span></label>
+        </div>
+        <label class="field ends-field" id="ends-count" hidden>How many payments in total?
+          <input type="number" name="payments" min="1" max="600" placeholder="24" />
+          <span class="muted small" id="ends-hint"></span>
+        </label>
+        <label class="field ends-field" id="ends-month" hidden>Last month
+          <input type="month" name="endMonth" />
+        </label>
+      </fieldset>
       <label class="field">Note <input type="text" name="note" maxlength="200" placeholder="Monthly salary" /></label>
       <button class="primary" type="submit">Save repeat</button>
       <p class="form-msg" id="repeat-msg"></p>
