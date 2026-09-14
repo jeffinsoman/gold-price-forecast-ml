@@ -45,6 +45,12 @@
       <p class="status-detail"></p>
     </div>
 
+    <div class="tiles holdings">
+      <div class="tile hold"><span class="tile-label"><span aria-hidden="true">💵</span> Cash in Hand</span><span class="tile-value" id="tile-cash">—</span><span class="tile-foot" id="tile-cash-foot"></span></div>
+      <div class="tile hold"><span class="tile-label"><span aria-hidden="true">🏦</span> Bank</span><span class="tile-value" id="tile-bank">—</span><span class="tile-foot" id="tile-bank-foot"></span></div>
+    </div>
+    <p class="muted small" id="lending-line"></p>
+
     <div class="tiles">
       <div class="tile"><span class="tile-label"><span aria-hidden="true">🔄</span> Carried forward</span><span class="tile-value" id="tile-carried">—</span><span class="tile-foot" id="tile-carried-foot"></span></div>
       <div class="tile"><span class="tile-label"><span aria-hidden="true">💰</span> Income</span><span class="tile-value" id="tile-income">—</span></div>
@@ -58,9 +64,8 @@
 
     <div class="split">
       <div class="panel">
-        <h3><span aria-hidden="true">👛</span> What you hold now</h3>
+        <h3><span aria-hidden="true">👛</span> Where it sits</h3>
         <ul class="bars" id="account-balances"></ul>
-        <p class="muted small" id="lending-line"></p>
       </div>
       <div class="panel">
         <h3><span aria-hidden="true">💰</span> Income by account</h3>

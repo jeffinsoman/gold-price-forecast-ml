@@ -99,7 +99,8 @@ build image installs any root `requirements.txt` it finds, which pulled torch an
 every Worker build. The Worker needs none of it.
 
 ### Dashboard (first page)
-Opens on the current month and answers one question — did this month stay inside the budget?
+Opens with the two balances that matter — **Cash in Hand** and **Bank**, as they stand right now —
+then answers one question about the month: did it stay inside the budget?
 
 > **Sep 2026 · Income 9,000 · Expense 10,000 · OUT OF BUDGET** — out of budget by 1,000
 >

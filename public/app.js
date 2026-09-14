@@ -469,16 +469,24 @@ async function loadDashboard(month) {
     ? `${money(s.available)} available this month, ${money(s.expensePaid)} spent so far, ${money(s.expenseUpcoming)} still to come.`
     : `${money(s.carriedForward)} carried in. Add income and expenses to see this month take shape.`;
 
-  // What you actually hold, plus what is out with friends.
-  splitBars($("account-balances"), data.accounts.balances, state.options.accounts, "income");
+  // What you actually hold, front and centre.
+  const held = data.accounts.balances;
+  const cash = held["Cash in Hand"] ?? 0;
+  const bank = held.Bank ?? 0;
+  const asAt = month === state.currentMonth ? "right now" : `as at the end of ${monthLabel(month)}`;
+
+  setAmount($("tile-cash"), cash);
+  setAmount($("tile-bank"), bank);
+  $("tile-cash-foot").textContent = asAt;
+  $("tile-bank-foot").textContent = asAt;
+
+  splitBars($("account-balances"), held, state.options.accounts, "income");
   const { lent, borrowed } = data.lending;
-  const parts = [];
+  const parts = [`👛 ${money(cash + bank)} in hand altogether`];
   if (data.accounts.cardSpend) parts.push(`${money(data.accounts.cardSpend)} on the credit card`);
   if (lent.outstanding) parts.push(`🤝 ${money(lent.outstanding)} still with friends`);
   if (borrowed.outstanding) parts.push(`🙏 ${money(borrowed.outstanding)} you owe`);
-  $("lending-line").textContent = parts.length
-    ? `Plus ${parts.join(", ")}.`
-    : "Nothing on the card, nothing owed either way.";
+  $("lending-line").textContent = `${parts.join(" · ")}.`;
 
   splitBars($("income-split"), s.incomeByAccount, state.options.incomeAccounts, "income");
   splitBars($("expense-split"), s.expenseByMethod, state.options.expenseMethods, "expense");

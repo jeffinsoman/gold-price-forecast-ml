@@ -92,6 +92,11 @@ main { max-width: 1040px; margin: 0 auto; padding: 16px 20px 60px; }
 .tile-value.negative { color: var(--red); }
 .tile[hidden] { display: none; }
 
+/* The money you actually hold, called out above the month's arithmetic */
+.tiles.holdings { grid-template-columns: repeat(2, 1fr); margin-bottom: 4px; }
+.tile.hold { background: linear-gradient(140deg, rgba(37, 99, 235, 0.1), rgba(22, 163, 74, 0.08)); }
+.tile.hold .tile-value { font-size: 1.45rem; white-space: nowrap; }
+
 .meter { height: 10px; border-radius: 999px; background: var(--line); overflow: hidden; }
 .meter-fill { height: 100%; width: 0; background: var(--green); transition: width 0.3s ease; }
 .meter-fill.over { background: var(--red); }
@@ -291,6 +296,7 @@ h3 { display: flex; align-items: center; gap: 7px; }
   .trend-bar { width: 14px; }
   .trend-label { font-size: 0.62rem; }
   .tile-value { font-size: 1.3rem; }
+  .tile.hold .tile-value { font-size: 1.25rem; }
 }
 
 /* Borrowed money reads the other way round */
