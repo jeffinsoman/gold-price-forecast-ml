@@ -83,7 +83,7 @@ export function validateEntry(body, kind) {
   let category = String(body?.category ?? "").trim() || "Other";
   if (!categories.includes(category)) category = "Other";
 
-  return {
+  const row = {
     date,
     month: monthKey(date),
     amount: Math.round(amount * 100) / 100,
@@ -92,6 +92,18 @@ export function validateEntry(body, kind) {
     friend: String(body?.friend ?? "").trim().slice(0, 60),
     note: String(body?.note ?? "").trim().slice(0, 200),
   };
+
+  // An expense can be money already gone, or a payment still expected. Only a
+  // paid one moves an account balance.
+  if (!isIncome) row.paid = isPaid(body?.paid);
+  return row;
+}
+
+/** Anything but an explicit no counts as paid, so older callers keep working. */
+export function isPaid(value) {
+  if (value === undefined || value === null || value === "") return 1;
+  if (typeof value === "string") return ["0", "false", "no", "pending", "unpaid"].includes(value.toLowerCase()) ? 0 : 1;
+  return value ? 1 : 0;
 }
 
 /**
@@ -125,9 +137,10 @@ export function friendTotals(outRows = [], backRows = []) {
  * Each month starts fresh; nothing is carried in from the one before.
  * Spending more than came in reads as OUT OF BUDGET.
  */
-export function summarize({ month, incomeTotal = 0, expenseTotal = 0 }) {
+export function summarize({ month, incomeTotal = 0, expenseTotal = 0, expensePending = 0 }) {
   const income = Math.round((Number(incomeTotal) || 0) * 100) / 100;
   const expense = Math.round((Number(expenseTotal) || 0) * 100) / 100;
+  const pending = Math.round((Number(expensePending) || 0) * 100) / 100;
   const balance = income - expense;
   const hasEntries = income > 0 || expense > 0;
   const isOverBudget = hasEntries && balance < 0;
@@ -151,6 +164,8 @@ export function summarize({ month, incomeTotal = 0, expenseTotal = 0 }) {
     label: monthLabel(month),
     incomeTotal: income,
     expenseTotal: expense,
+    expensePending: pending,
+    expensePaid: Math.round((expense - pending) * 100) / 100,
     balance,
     hasEntries,
     isOverBudget,
@@ -182,6 +197,8 @@ export function lines(rows) {
  * A credit card is not an account you hold money in: charging it owes the card,
  * and that bill is settled from the bank later. So card spending is kept apart
  * as `card.pending` until it is paid.
+ *
+ * Expenses still waiting to be paid move nothing at all - pass only paid ones.
  */
 export function accountBalances({
   incomeRows = [],

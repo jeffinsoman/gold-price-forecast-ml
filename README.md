@@ -96,6 +96,16 @@ Date, amount, where it came in or went out (Cash in Hand / Bank, or Cash / Bank 
 category, an optional friend and a note. Below the form, that month's entries, each editable and
 deletable.
 
+An expense is either **paid** or **still to pay**:
+
+* **Paid** — the money has gone, so it comes off cash or bank straight away (or onto the card bill).
+* **Still to pay** — a payment you are expecting to make. It is recorded, listed under **Still to
+  pay** on the dashboard, and counted in the month's expense, but it moves no balance at all until
+  you press **Mark paid** on it.
+
+So the wallets always show money that has actually moved, while the month still shows what you are
+committed to.
+
 ### 🤝 Friends
 Put a name on an expense when money goes out to someone, and on the income when it comes back. The
 tab nets the two per person across every month — *AED 500 owed to you*, or *settled*.

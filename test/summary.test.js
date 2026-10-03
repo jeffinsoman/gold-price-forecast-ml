@@ -5,6 +5,7 @@ import {
   accountBalances,
   addMonths,
   friendTotals,
+  isPaid,
   lines,
   isIsoDate,
   monthKey,
@@ -198,4 +199,53 @@ test("money is netted per friend", () => {
 
   const owed = friendTotals([], [{ friend: "Sam", total: 400 }]);
   assert.equal(owed[0].net, -400);
+});
+
+test("an expense is paid unless it says otherwise", () => {
+  assert.equal(validateEntry({ date: "2026-10-03", amount: 100, method: "Bank" }, "expense").paid, 1);
+  assert.equal(validateEntry({ date: "2026-10-03", amount: 100, method: "Bank", paid: true }, "expense").paid, 1);
+  assert.equal(validateEntry({ date: "2026-10-03", amount: 100, method: "Bank", paid: false }, "expense").paid, 0);
+  assert.equal(validateEntry({ date: "2026-10-03", amount: 100, method: "Bank", paid: "0" }, "expense").paid, 0);
+  assert.equal(validateEntry({ date: "2026-10-03", amount: 100, method: "Bank", paid: "1" }, "expense").paid, 1);
+
+  // Income is never pending: it is money that has arrived.
+  assert.equal("paid" in validateEntry({ date: "2026-10-03", amount: 100, account: "Bank" }, "income"), false);
+
+  assert.equal(isPaid(undefined), 1);
+  assert.equal(isPaid(""), 1);
+  assert.equal(isPaid("pending"), 0);
+  assert.equal(isPaid("no"), 0);
+  assert.equal(isPaid(0), 0);
+});
+
+test("the month separates what is paid from what is still to pay", () => {
+  const s = summarize({ month: "2026-10", incomeTotal: 9000, expenseTotal: 5800, expensePending: 1200 });
+  assert.equal(s.expenseTotal, 5800);
+  assert.equal(s.expensePaid, 4600);
+  assert.equal(s.expensePending, 1200);
+
+  // The balance counts the month's commitments, paid or not.
+  assert.equal(s.balance, 3200);
+  assert.equal(s.status, "IN CONTROL");
+
+  const nothing = summarize({ month: "2026-10", incomeTotal: 100, expenseTotal: 40 });
+  assert.equal(nothing.expensePending, 0);
+  assert.equal(nothing.expensePaid, 40);
+});
+
+test("an expected payment does not move an account until it is paid", () => {
+  // Balances are built from paid rows only, so an unpaid one simply is not there.
+  const waiting = accountBalances({
+    incomeRows: [{ account: "Bank", total: 9000 }],
+    expenseRows: [{ method: "Bank", total: 3500 }],
+    opening: { Bank: 5000 },
+  });
+  assert.equal(waiting.balances.Bank, 10500);
+
+  const settled = accountBalances({
+    incomeRows: [{ account: "Bank", total: 9000 }],
+    expenseRows: [{ method: "Bank", total: 3500 }, { method: "Bank", total: 1200 }],
+    opening: { Bank: 5000 },
+  });
+  assert.equal(settled.balances.Bank, 9300);
 });

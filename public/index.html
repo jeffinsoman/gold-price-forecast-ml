@@ -99,7 +99,17 @@
         <h2><span class="dot out"></span> Expense</h2>
         <span class="card-total out" id="dash-expense-total">—</span>
       </header>
+      <p class="line-sub" id="dash-expense-sub"></p>
       <ul class="lines" id="dash-expense"></ul>
+    </section>
+
+    <section class="card" id="to-pay-card" hidden>
+      <header class="card-head">
+        <h2><span aria-hidden="true">⏳</span> Still to pay</h2>
+        <span class="card-total out" id="to-pay-total">—</span>
+      </header>
+      <p class="muted tiny">Recorded, but the money has not left yet — so it is not taken off cash or bank until you mark it paid.</p>
+      <div id="to-pay"></div>
     </section>
 
     <section class="card balance-card">
@@ -165,6 +175,13 @@
         <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="5000" required />
           <span class="quick" data-quick="expense"></span></label>
       </div>
+      <fieldset class="field">
+        <legend>Has it been paid?</legend>
+        <div class="choices" id="expense-paid">
+          <label class="choice"><input type="radio" name="paid" value="1" checked /><span><span aria-hidden="true">✅</span> Paid</span></label>
+          <label class="choice"><input type="radio" name="paid" value="0" /><span><span aria-hidden="true">⏳</span> Still to pay</span></label>
+        </div>
+      </fieldset>
       <fieldset class="field"><legend>Paid by</legend><div class="choices" id="expense-methods"></div></fieldset>
       <fieldset class="field"><legend>Category</legend><div class="chips" id="expense-categories"></div></fieldset>
       <div class="grid">
