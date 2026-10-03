@@ -7,6 +7,7 @@ const ICONS = {
   Cash: "💵",
   Bank: "🏦",
   "Credit Card": "💳",
+  Tabby: "🧿",
   Salary: "💼",
   Business: "🏢",
   Freelance: "💻",
@@ -454,22 +455,42 @@ async function loadMonth(month) {
   setAmount($("wallet-cash"), accounts.balances["Cash in Hand"]);
   setAmount($("wallet-bank"), accounts.balances.Bank);
 
-  // The card is a bill, not an account: charges sit pending until the bank pays them.
-  const card = accounts.card;
-  setAmount($("wallet-card"), card.pending);
-  $("wallet-card-sub").textContent = card.charged
-    ? `${money(card.charged)} charged · ${money(card.paid)} paid`
-    : "nothing charged yet";
-  $("card-wallet").hidden = card.charged === 0 && card.pending === 0;
+  // A card or Tabby is a bill, not an account: charges sit pending until the
+  // bank settles them. One wallet card per bill that has seen any activity.
+  const bills = accounts.bills ?? [];
+  for (const old of document.querySelectorAll(".bill-wallet")) old.remove();
+  const wallets = document.querySelector(".wallets");
+  for (const bill of bills) {
+    if (!bill.charged && !bill.pending) continue;
+    const node = document.createElement("article");
+    node.className = "wallet card-wallet bill-wallet";
+    node.innerHTML =
+      `<span class="wallet-icon" aria-hidden="true">${icon(bill.method)}</span>` +
+      `<div><p class="wallet-label">${bill.method} pending</p>` +
+      `<p class="wallet-value out">${money(bill.pending)}</p>` +
+      `<p class="line-sub">${money(bill.charged)} charged · ${money(bill.paid)} paid</p></div>`;
+    wallets.append(node);
+  }
 
+  // Settling: offer only the bills with something still on them.
+  const owing = bills.filter((bill) => bill.pendingAllTime > 0);
   const settle = $("card-settle");
-  settle.hidden = card.pendingAllTime <= 0;
-  $("card-form").amount.max = card.pendingAllTime;
-  $("card-form").amount.placeholder = Math.round(card.pendingAllTime);
+  settle.hidden = owing.length === 0;
+  if (owing.length) {
+    const chosen = $("card-form").querySelector('input[name="method"]:checked')?.value;
+    fillChoices(
+      $("bill-methods"),
+      owing.map((bill) => bill.method),
+      "method",
+      owing.some((bill) => bill.method === chosen) ? chosen : undefined,
+    );
+    syncBillLimit();
+  }
+
   $("card-payments").replaceChildren(
-    ...(data.cardPayments.length
-      ? data.cardPayments.map(cardPaymentRow)
-      : [empty("No card payments in this month.")]),
+    ...(data.billPayments.length
+      ? data.billPayments.map(cardPaymentRow)
+      : [empty("No bill payments in this month.")]),
   );
 
   const opening = accounts.opening ?? {};
@@ -481,7 +502,7 @@ async function loadMonth(month) {
   $("wallet-note").textContent =
     `Running totals to the end of ${shortMonth(month)}` +
     (started ? ` · ${money(started)} opening balance included` : "") +
-    (card.pending > 0 ? ` · the card bill is paid from the bank` : "");
+    (accounts.billsPending > 0 ? ` · ${money(accounts.billsPending)} on bills, paid from the bank` : "");
 
   // Dashboard lines.
   drawLines($("dash-income"), data.incomeLines, "in", "No income this month yet.");
@@ -530,11 +551,12 @@ async function loadMonth(month) {
 }
 
 function cardPaymentRow(row) {
+  const bill = row.method ?? "Credit Card";
   const item = document.createElement("div");
   item.className = "entry";
   item.innerHTML =
-    `<span class="line-icon" aria-hidden="true">💳</span>` +
-    `<div class="entry-main"><p class="entry-title">Card payment</p>` +
+    `<span class="line-icon" aria-hidden="true">${icon(bill)}</span>` +
+    `<div class="entry-main"><p class="entry-title">${bill} payment</p>` +
     `<p class="entry-sub">${dayLabel(row.date)} · from 🏦 Bank${row.note ? ` · ${row.note}` : ""}</p></div>`;
 
   const right = document.createElement("div");
@@ -545,8 +567,8 @@ function cardPaymentRow(row) {
   remove.className = "link danger";
   remove.textContent = "Delete";
   remove.addEventListener("click", async () => {
-    await api(`/card-payments/${row.id}`, { method: "DELETE" });
-    toast("Card payment removed.");
+    await api(`/bill-payments/${row.id}`, { method: "DELETE" });
+    toast("Bill payment removed.");
     await loadMonth(state.month);
   });
   right.append(remove);
@@ -613,18 +635,31 @@ function bindOpeningForm() {
   });
 }
 
+/** Keep the amount box matched to the bill that is selected. */
+function syncBillLimit() {
+  const form = $("card-form");
+  const bill = (state.data?.accounts?.bills ?? []).find(
+    (row) => row.method === form.querySelector('input[name="method"]:checked')?.value,
+  );
+  const pending = bill?.pendingAllTime ?? 0;
+  form.amount.max = pending;
+  form.amount.placeholder = Math.round(pending);
+}
+
 function bindCardForm() {
   const form = $("card-form");
   form.date.value = state.today;
+  $("bill-methods").addEventListener("change", syncBillLimit);
 
   const send = async (amount) => {
+    const which = form.querySelector('input[name="method"]:checked')?.value;
     try {
-      const result = await api("/card-payments", {
+      const result = await api("/bill-payments", {
         method: "POST",
-        body: JSON.stringify({ amount, date: form.date.value, note: form.note.value }),
+        body: JSON.stringify({ method: which, amount, date: form.date.value, note: form.note.value }),
       });
-      const left = result.accounts.card.pendingAllTime;
-      const text = `💳 Paid ${money(result.payment.amount)} off the card from the bank.`;
+      const left = result.accounts.bills.find((row) => row.method === which)?.pendingAllTime ?? 0;
+      const text = `${icon(which)} Paid ${money(result.payment.amount)} off ${which} from the bank.`;
       message($("card-msg"), `${text} ${left > 0 ? `${money(left)} still pending.` : "Nothing pending now."}`);
       toast(text);
       form.reset();

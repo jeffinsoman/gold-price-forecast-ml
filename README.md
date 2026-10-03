@@ -83,17 +83,18 @@ Pushing to `main` deploys automatically through Workers Builds.
 ### 🏠 Dashboard
 * **Cash in hand** and **Bank**, counted from every entry up to the end of the month shown, on top of
   the **opening balance** you set once for each account.
-* **Credit card pending** — charging the card does not move money out of the bank. It sits as pending
-  until you settle it: *Pay the card from the bank* takes the whole bill or part of it, and only then
-  does the bank balance drop. The month's expense still counts on the day it was charged.
+* **Credit Card** and **Tabby pending** — putting a spend on either does not move money out of the
+  bank. It sits as a pending bill until you settle it: *Pay a bill from the bank* lets you pick the
+  bill and pay the whole thing or part of it, and only then does the bank balance drop. Each bill is
+  counted on its own. The month's expense still counts on the day it was charged.
 * **Income** and **Expense**, each as a short list of lines — one per category, biggest first, with a
   bar for its share.
 * **Balance** — `income − expense`, and nothing else. Each month stands on its own; next month starts
   fresh.
 
 ### 💰 Income · 🧾 Expense
-Date, amount, where it came in or went out (Cash in Hand / Bank, or Cash / Bank / Credit Card), a
-category, an optional friend and a note. Below the form, that month's entries, each editable and
+Date, amount, where it came in or went out (Cash in Hand / Bank, or Cash / Bank / Credit Card /
+Tabby), a category, an optional friend and a note. Below the form, that month's entries, each editable and
 deletable.
 
 Expense categories are the loans, EMIs and outstandings you keep track of — ADCB Loan, CBD EMI,
@@ -108,8 +109,8 @@ Both sides say whether the money has actually moved:
 | **Income** | ✅ Received | ⏳ Still to come |
 | **Expense** | ✅ Paid | ⏳ Still to pay |
 
-Settled money lands in cash or bank straight away (or on the card bill). Money on its way is
-recorded and counted in the month, listed under **Still to come** or **Still to pay** on the
+Settled money lands in cash or bank straight away (or on the Credit Card or Tabby bill). Money on
+its way is recorded and counted in the month, listed under **Still to come** or **Still to pay** on the
 dashboard, but it moves no balance until you press **Mark received** or **Mark paid** on the row.
 
 So the wallets always show money that has really moved, while the month shows what you are owed and
@@ -152,6 +153,6 @@ At the foot of the Dashboard: deletes every entry in every month, two taps, no u
 | POST | `/api/income` · `/api/expense` | `{ date, amount, account \| method, category, friend, note }` |
 | PATCH · DELETE | `/api/income/:id` · `/api/expense/:id` | Edit or remove an entry |
 | GET · PUT | `/api/opening` | The opening balance per account |
-| POST | `/api/card-payments` | `{ date, amount, note }` — settles the card from the bank |
-| DELETE | `/api/card-payments/:id` | Undo a card payment |
+| POST | `/api/bill-payments` | `{ method, date, amount, note }` — settles a Credit Card or Tabby bill from the bank |
+| DELETE | `/api/bill-payments/:id` | Undo a bill payment |
 | POST | `/api/reset` | `{ "confirm": "RESET" }` — empties the tracker |

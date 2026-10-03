@@ -2,7 +2,11 @@
 // Pure functions: no D1, no Worker globals, so they can be unit tested directly.
 
 export const INCOME_ACCOUNTS = ["Cash in Hand", "Bank"];
-export const EXPENSE_METHODS = ["Cash", "Bank", "Credit Card"];
+export const EXPENSE_METHODS = ["Cash", "Bank", "Credit Card", "Tabby"];
+
+// Ways of paying that owe someone later: spending on one adds to its bill, and
+// the bill is settled from the bank.
+export const BILL_METHODS = ["Credit Card", "Tabby"];
 
 export const INCOME_CATEGORIES = [
   "Salary",
@@ -240,13 +244,14 @@ export function accountBalances({
   incomeRows = [],
   expenseRows = [],
   opening = {},
-  cardPaid = 0,
+  billsPaid = {},
 } = {}) {
+  const round = (value) => Math.round(value * 100) / 100;
   const balances = Object.fromEntries(
-    INCOME_ACCOUNTS.map((account) => [account, Math.round((Number(opening[account]) || 0) * 100) / 100]),
+    INCOME_ACCOUNTS.map((account) => [account, round(Number(opening[account]) || 0)]),
   );
+  const charged = Object.fromEntries(BILL_METHODS.map((method) => [method, 0]));
 
-  let charged = 0;
   for (const row of incomeRows) {
     if (row.account in balances) balances[row.account] += Number(row.total ?? row.amount) || 0;
   }
@@ -254,18 +259,22 @@ export function accountBalances({
     const amount = Number(row.total ?? row.amount) || 0;
     if (row.method === "Cash") balances["Cash in Hand"] -= amount;
     else if (row.method === "Bank") balances.Bank -= amount;
-    else charged += amount;
+    else if (row.method in charged) charged[row.method] += amount;
   }
 
-  const paid = Math.round((Number(cardPaid) || 0) * 100) / 100;
-  balances.Bank -= paid;
+  // Settling a bill is the moment the money leaves the bank.
+  const bills = BILL_METHODS.map((method) => {
+    const paid = round(Number(billsPaid[method]) || 0);
+    balances.Bank -= paid;
+    return { method, charged: round(charged[method]), paid, pending: round(charged[method] - paid) };
+  });
 
-  const round = (value) => Math.round(value * 100) / 100;
   for (const account of Object.keys(balances)) balances[account] = round(balances[account]);
 
   return {
     balances,
-    card: { charged: round(charged), paid, pending: round(charged - paid) },
+    bills,
+    billsPending: round(bills.reduce((sum, bill) => sum + bill.pending, 0)),
     total: round(Object.values(balances).reduce((sum, value) => sum + value, 0)),
   };
 }
@@ -282,8 +291,11 @@ export function validateOpening(body) {
   return opening;
 }
 
-/** A payment off the credit card: money leaving the bank to settle the bill. */
-export function validateCardPayment(body, pending) {
+/** A payment off a bill: money leaving the bank to settle the card or Tabby. */
+export function validateBillPayment(body, pending) {
+  const method = String(body?.method ?? BILL_METHODS[0]).trim();
+  if (!BILL_METHODS.includes(method)) throw new Error(`Bill must be one of ${BILL_METHODS.join(", ")}.`);
+
   const date = String(body?.date ?? "").trim();
   if (!isIsoDate(date)) throw new Error("Date must be a real date in YYYY-MM-DD format.");
 
@@ -292,10 +304,11 @@ export function validateCardPayment(body, pending) {
 
   const rounded = Math.round(amount * 100) / 100;
   if (pending !== undefined && rounded > Math.round(pending * 100) / 100 + 0.001) {
-    throw new Error(`Only ${pending.toLocaleString("en-US")} is pending on the card.`);
+    throw new Error(`Only ${pending.toLocaleString("en-US")} is pending on ${method}.`);
   }
 
   return {
+    method,
     date,
     month: monthKey(date),
     amount: rounded,

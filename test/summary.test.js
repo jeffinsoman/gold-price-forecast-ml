@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  BILL_METHODS,
   EXPENSE_CATEGORIES,
+  EXPENSE_METHODS,
   accountBalances,
   addMonths,
   friendTotals,
@@ -12,7 +14,7 @@ import {
   monthKey,
   monthLabel,
   summarize,
-  validateCardPayment,
+  validateBillPayment,
   validateEntry,
   validateOpening,
 } from "../worker/summary.js";
@@ -96,37 +98,79 @@ test("an opening balance sits under every balance after it", () => {
   assert.throws(() => validateOpening({ Bank: "lots" }), /must be a number/);
 });
 
-test("a card charge is pending until the bank pays it", () => {
+test("a card or Tabby charge is pending until the bank pays it", () => {
   const charged = accountBalances({
     incomeRows: [{ account: "Bank", total: 9000 }],
     expenseRows: [{ method: "Credit Card", total: 1200 }],
   });
   // The bank is untouched by the charge; the card owes it.
   assert.equal(charged.balances.Bank, 9000);
-  assert.deepEqual(charged.card, { charged: 1200, paid: 0, pending: 1200 });
+  assert.deepEqual(charged.bills, [
+    { method: "Credit Card", charged: 1200, paid: 0, pending: 1200 },
+    { method: "Tabby", charged: 0, paid: 0, pending: 0 },
+  ]);
+  assert.equal(charged.billsPending, 1200);
 
   const part = accountBalances({
     incomeRows: [{ account: "Bank", total: 9000 }],
     expenseRows: [{ method: "Credit Card", total: 1200 }],
-    cardPaid: 700,
+    billsPaid: { "Credit Card": 700 },
   });
   assert.equal(part.balances.Bank, 8300);
-  assert.equal(part.card.pending, 500);
+  assert.equal(part.bills[0].pending, 500);
 
   const settled = accountBalances({
     incomeRows: [{ account: "Bank", total: 9000 }],
     expenseRows: [{ method: "Credit Card", total: 1200 }],
-    cardPaid: 1200,
+    billsPaid: { "Credit Card": 1200 },
   });
   assert.equal(settled.balances.Bank, 7800);
-  assert.equal(settled.card.pending, 0);
+  assert.equal(settled.bills[0].pending, 0);
 });
 
-test("a card payment cannot exceed what is pending", () => {
-  assert.equal(validateCardPayment({ date: "2026-10-20", amount: "700" }, 700).amount, 700);
-  assert.throws(() => validateCardPayment({ date: "2026-10-20", amount: 800 }, 700), /Only 700 is pending/);
-  assert.throws(() => validateCardPayment({ date: "2026-10-20", amount: 0 }, 700), /greater than zero/);
-  assert.throws(() => validateCardPayment({ date: "nope", amount: 10 }, 700), /real date/);
+test("Tabby is its own bill, settled from the bank like the card", () => {
+  assert.deepEqual(EXPENSE_METHODS, ["Cash", "Bank", "Credit Card", "Tabby"]);
+  assert.deepEqual(BILL_METHODS, ["Credit Card", "Tabby"]);
+  assert.equal(validateEntry({ date: "2026-10-03", amount: 900, method: "Tabby" }, "expense").method, "Tabby");
+
+  const both = accountBalances({
+    incomeRows: [{ account: "Bank", total: 15000 }],
+    expenseRows: [{ method: "Credit Card", total: 1200 }, { method: "Tabby", total: 900 }],
+  });
+  assert.equal(both.balances.Bank, 15000);
+  assert.equal(both.billsPending, 2100);
+
+  // Paying one bill leaves the other exactly where it was.
+  const paid = accountBalances({
+    incomeRows: [{ account: "Bank", total: 15000 }],
+    expenseRows: [{ method: "Credit Card", total: 1200 }, { method: "Tabby", total: 900 }],
+    billsPaid: { Tabby: 400 },
+  });
+  assert.equal(paid.balances.Bank, 14600);
+  assert.deepEqual(
+    paid.bills.map((bill) => [bill.method, bill.pending]),
+    [["Credit Card", 1200], ["Tabby", 500]],
+  );
+  assert.equal(paid.billsPending, 1700);
+});
+
+test("a bill payment names its bill and cannot exceed what is pending", () => {
+  const card = validateBillPayment({ date: "2026-10-20", amount: "700" }, 700);
+  assert.equal(card.amount, 700);
+  assert.equal(card.method, "Credit Card");
+
+  const tabby = validateBillPayment({ date: "2026-10-20", amount: 400, method: "Tabby" }, 900);
+  assert.equal(tabby.method, "Tabby");
+  assert.equal(tabby.amount, 400);
+
+  assert.throws(() => validateBillPayment({ date: "2026-10-20", amount: 800 }, 700), /Only 700 is pending on Credit Card/);
+  assert.throws(
+    () => validateBillPayment({ date: "2026-10-20", amount: 950, method: "Tabby" }, 900),
+    /Only 900 is pending on Tabby/,
+  );
+  assert.throws(() => validateBillPayment({ date: "2026-10-20", amount: 10, method: "Postpay" }, 900), /Bill must be one of/);
+  assert.throws(() => validateBillPayment({ date: "2026-10-20", amount: 0 }, 700), /greater than zero/);
+  assert.throws(() => validateBillPayment({ date: "nope", amount: 10 }, 700), /real date/);
 });
 
 test("an empty month reports no entries", () => {

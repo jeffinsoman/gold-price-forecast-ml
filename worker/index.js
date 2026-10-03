@@ -6,6 +6,7 @@ import {
   EXPENSE_METHODS,
   INCOME_ACCOUNTS,
   INCOME_CATEGORIES,
+  BILL_METHODS,
   INCOME_ACCOUNTS as ACCOUNTS,
   accountBalances,
   addMonths,
@@ -15,7 +16,7 @@ import {
   summarize,
   today,
   isSettled,
-  validateCardPayment,
+  validateBillPayment,
   validateEntry,
   validateOpening,
 } from "./summary.js";
@@ -68,6 +69,11 @@ function ensureSchema(db) {
         // Already there.
       }
     }
+    try {
+      await db.prepare("ALTER TABLE card_payment ADD COLUMN method TEXT NOT NULL DEFAULT 'Credit Card'").run();
+    } catch {
+      // Already there.
+    }
     await db.batch([
       db.prepare("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)"),
       db.prepare(
@@ -103,8 +109,13 @@ async function held(db, month) {
     db
       .prepare("SELECT method, SUM(amount) AS total FROM expense WHERE month <= ?1 AND paid = 1 GROUP BY method")
       .bind(month),
-    db.prepare("SELECT COALESCE(SUM(amount), 0) AS paid FROM card_payment WHERE month <= ?1").bind(month),
+    db
+      .prepare("SELECT method, SUM(amount) AS paid FROM card_payment WHERE month <= ?1 GROUP BY method")
+      .bind(month),
   ]);
+
+  const billsPaid = {};
+  for (const row of card.results) billsPaid[row.method ?? "Credit Card"] = Number(row.paid) || 0;
 
   const opening = await openingBalances(db);
   return {
@@ -112,21 +123,29 @@ async function held(db, month) {
       incomeRows: income.results,
       expenseRows: expense.results,
       opening,
-      cardPaid: Number(card.results[0]?.paid) || 0,
+      billsPaid,
     }),
     opening,
   };
 }
 
-/** Everything still owed on the card, across every month. */
-async function cardPending(db) {
-  const row = await db
-    .prepare(
-      "SELECT COALESCE((SELECT SUM(amount) FROM expense WHERE method = 'Credit Card' AND paid = 1), 0)" +
-        " - COALESCE((SELECT SUM(amount) FROM card_payment), 0) AS pending",
-    )
-    .first();
-  return Math.round((Number(row?.pending) || 0) * 100) / 100;
+/** What is still owed on each bill, across every month. */
+async function billsPending(db) {
+  const [charged, paid] = await db.batch([
+    db
+      .prepare("SELECT method, SUM(amount) AS total FROM expense WHERE paid = 1 AND method IN (?1, ?2) GROUP BY method")
+      .bind(...BILL_METHODS),
+    db.prepare("SELECT method, SUM(amount) AS total FROM card_payment GROUP BY method"),
+  ]);
+
+  const owed = Object.fromEntries(BILL_METHODS.map((method) => [method, 0]));
+  for (const row of charged.results) owed[row.method] += Number(row.total) || 0;
+  for (const row of paid.results) {
+    const method = row.method ?? "Credit Card";
+    if (method in owed) owed[method] -= Number(row.total) || 0;
+  }
+  for (const method of BILL_METHODS) owed[method] = Math.round(owed[method] * 100) / 100;
+  return owed;
 }
 
 /** Everything tagged with a name, netted per friend, across every month. */
@@ -145,7 +164,7 @@ async function monthData(db, month) {
     held(db, month),
     friends(db),
     db.prepare("SELECT * FROM card_payment WHERE month = ?1 ORDER BY date DESC, id DESC").bind(month).all(),
-    cardPending(db),
+    billsPending(db),
   ]);
 
   const total = (rows) => rows.reduce((sum, row) => sum + Number(row.amount), 0);
@@ -166,8 +185,11 @@ async function monthData(db, month) {
     expenseLines: lines(expense.results),
     toPay: unpaid,
     toCome: awaited,
-    accounts: { ...accounts, card: { ...accounts.card, pendingAllTime: pending } },
-    cardPayments: payments.results,
+    accounts: {
+      ...accounts,
+      bills: accounts.bills.map((bill) => ({ ...bill, pendingAllTime: pending[bill.method] ?? 0 })),
+    },
+    billPayments: payments.results,
     friends: withFriends,
   };
 }
@@ -287,19 +309,22 @@ async function handleApi(request, env, url) {
     return json({ opening, ...(await monthData(db, monthKey(today()))) });
   }
 
-  // POST /api/card-payments - settle some of the card bill from the bank.
-  if (method === "POST" && path === "card-payments") {
-    const pending = await cardPending(db);
-    if (pending <= 0) return fail("Nothing is pending on the card.");
-    const row = validateCardPayment(await readJson(request), pending);
+  // POST /api/bill-payments - settle some of a card or Tabby bill from the bank.
+  if (method === "POST" && path === "bill-payments") {
+    const body = await readJson(request);
+    const owed = await billsPending(db);
+    const which = String(body?.method ?? BILL_METHODS[0]);
+    if (!(owed[which] > 0)) return fail(`Nothing is pending on ${which}.`);
+
+    const row = validateBillPayment(body, owed[which]);
     const result = await db
-      .prepare("INSERT INTO card_payment (date, month, amount, note) VALUES (?1, ?2, ?3, ?4)")
-      .bind(row.date, row.month, row.amount, row.note)
+      .prepare("INSERT INTO card_payment (date, month, amount, note, method) VALUES (?1, ?2, ?3, ?4, ?5)")
+      .bind(row.date, row.month, row.amount, row.note, row.method)
       .run();
     return json({ id: result.meta.last_row_id, payment: row, ...(await monthData(db, row.month)) }, 201);
   }
 
-  const payment = path.match(/^card-payments\/(\d+)$/);
+  const payment = path.match(/^bill-payments\/(\d+)$/);
   if (method === "DELETE" && payment) {
     const result = await db.prepare("DELETE FROM card_payment WHERE id = ?1").bind(Number(payment[1])).run();
     if (!result.meta.changes) return fail("That payment no longer exists.", 404);

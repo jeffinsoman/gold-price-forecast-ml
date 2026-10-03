@@ -58,20 +58,13 @@
           <p class="wallet-value" id="wallet-bank">—</p>
         </div>
       </article>
-      <article class="wallet card-wallet" id="card-wallet">
-        <span class="wallet-icon" aria-hidden="true">💳</span>
-        <div>
-          <p class="wallet-label">Credit card pending</p>
-          <p class="wallet-value out" id="wallet-card">—</p>
-          <p class="line-sub" id="wallet-card-sub"></p>
-        </div>
-      </article>
     </div>
     <p class="muted tiny" id="wallet-note"></p>
 
     <details class="card" id="card-settle" hidden>
-      <summary><span aria-hidden="true">💳</span> Pay the card from the bank</summary>
+      <summary><span aria-hidden="true">💳</span> Pay a bill from the bank</summary>
       <form id="card-form" class="form">
+        <fieldset class="field"><legend>Which bill?</legend><div class="choices" id="bill-methods"></div></fieldset>
         <div class="grid">
           <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" required /></label>
           <label class="field">Date <input type="date" name="date" required /></label>
