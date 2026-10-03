@@ -15,7 +15,28 @@ export const INCOME_CATEGORIES = [
 ];
 
 export const EXPENSE_CATEGORIES = [
+  "ADCB Loan",
+  "CBD EMI",
+  "Mashreq EMI",
+  "ADCB EMI",
+  "DIB EMI",
+  "Home pay",
+  "Friend",
   "Food",
+  "ADCB Outstanding",
+  "CBD Outstanding",
+  "Mashreq Outstanding",
+  "Entertainment",
+  "Other",
+  "Active EMI ADCB",
+  "Active EMI CBD",
+  "Active EMI Mashreq",
+  "Active EMI DIB",
+];
+
+// Categories used before the list above. Entries already filed under them keep
+// their category when edited, even though the pickers no longer offer them.
+const RETIRED_CATEGORIES = [
   "Groceries",
   "Rent",
   "Bills",
@@ -24,8 +45,6 @@ export const EXPENSE_CATEGORIES = [
   "Health",
   "Education",
   "EMI",
-  "Entertainment",
-  "Other",
 ];
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -81,7 +100,9 @@ export function validateEntry(body, kind) {
   }
 
   let category = String(body?.category ?? "").trim() || "Other";
-  if (!categories.includes(category)) category = "Other";
+  if (!categories.includes(category) && !(!isIncome && RETIRED_CATEGORIES.includes(category))) {
+    category = "Other";
+  }
 
   const row = {
     date,

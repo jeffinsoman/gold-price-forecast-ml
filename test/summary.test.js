@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  EXPENSE_CATEGORIES,
   accountBalances,
   addMonths,
   friendTotals,
@@ -248,4 +249,41 @@ test("an expected payment does not move an account until it is paid", () => {
     opening: { Bank: 5000 },
   });
   assert.equal(settled.balances.Bank, 9300);
+});
+
+test("the expense categories are the ones on the list", () => {
+  assert.deepEqual(EXPENSE_CATEGORIES, [
+    "ADCB Loan",
+    "CBD EMI",
+    "Mashreq EMI",
+    "ADCB EMI",
+    "DIB EMI",
+    "Home pay",
+    "Friend",
+    "Food",
+    "ADCB Outstanding",
+    "CBD Outstanding",
+    "Mashreq Outstanding",
+    "Entertainment",
+    "Other",
+    "Active EMI ADCB",
+    "Active EMI CBD",
+    "Active EMI Mashreq",
+    "Active EMI DIB",
+  ]);
+
+  for (const category of EXPENSE_CATEGORIES) {
+    assert.equal(
+      validateEntry({ date: "2026-10-03", amount: 100, method: "Bank", category }, "expense").category,
+      category,
+    );
+  }
+
+  // Entries filed under an older category keep it; nonsense still falls back.
+  assert.equal(validateEntry({ date: "2026-10-03", amount: 100, method: "Bank", category: "Rent" }, "expense").category, "Rent");
+  assert.equal(validateEntry({ date: "2026-10-03", amount: 100, method: "Bank", category: "Groceries" }, "expense").category, "Groceries");
+  assert.equal(validateEntry({ date: "2026-10-03", amount: 100, method: "Bank", category: "nonsense" }, "expense").category, "Other");
+
+  // Income keeps its own list: an expense category is not one of them.
+  assert.equal(validateEntry({ date: "2026-10-03", amount: 100, account: "Bank", category: "DIB EMI" }, "income").category, "Other");
 });

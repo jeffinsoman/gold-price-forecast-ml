@@ -12,7 +12,25 @@ const ICONS = {
   Freelance: "💻",
   Interest: "📈",
   Gift: "🎁",
+  // Expense categories
+  "ADCB Loan": "🏛️",
+  "CBD EMI": "📆",
+  "Mashreq EMI": "📆",
+  "ADCB EMI": "📆",
+  "DIB EMI": "📆",
+  "Home pay": "🏠",
+  Friend: "🤝",
   Food: "🍽️",
+  "ADCB Outstanding": "🧾",
+  "CBD Outstanding": "🧾",
+  "Mashreq Outstanding": "🧾",
+  Entertainment: "🎬",
+  Other: "📌",
+  "Active EMI ADCB": "🔁",
+  "Active EMI CBD": "🔁",
+  "Active EMI Mashreq": "🔁",
+  "Active EMI DIB": "🔁",
+  // Categories retired from the pickers, still worn by older entries
   Groceries: "🛒",
   Rent: "🏠",
   Bills: "💡",
@@ -21,8 +39,6 @@ const ICONS = {
   Health: "🩺",
   Education: "🎓",
   EMI: "📆",
-  Entertainment: "🎬",
-  Other: "📌",
 };
 
 const QUICK_AMOUNTS = [50, 100, 500, 1000];
@@ -239,6 +255,11 @@ function entryRow(row, kind) {
 // -------------------------------------------------------------------
 let editSubmit = null;
 
+/** The pickers plus whatever this entry already wears, so nothing is lost on edit. */
+function withOwn(values, category) {
+  return category && !values.includes(category) ? [...values, category] : values;
+}
+
 function openEdit(kind, row) {
   const income = kind === "income";
   const fields = [
@@ -255,7 +276,7 @@ function openEdit(kind, row) {
       type: "chips",
       name: "category",
       label: "Category",
-      values: income ? state.options.incomeCategories : state.options.expenseCategories,
+      values: withOwn(income ? state.options.incomeCategories : state.options.expenseCategories, row.category),
       value: row.category,
     },
     { type: "text", name: "friend", label: "Friend", value: row.friend ?? "" },

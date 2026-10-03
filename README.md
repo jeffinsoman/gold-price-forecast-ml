@@ -96,6 +96,11 @@ Date, amount, where it came in or went out (Cash in Hand / Bank, or Cash / Bank 
 category, an optional friend and a note. Below the form, that month's entries, each editable and
 deletable.
 
+Expense categories are the loans, EMIs and outstandings you keep track of — ADCB Loan, CBD EMI,
+Mashreq EMI, ADCB EMI, DIB EMI, Home pay, Friend, Food, ADCB Outstanding, CBD Outstanding, Mashreq
+Outstanding, Entertainment, Other, and Active EMI for ADCB, CBD, Mashreq and DIB. An entry filed
+under an older category keeps it when you edit it.
+
 An expense is either **paid** or **still to pay**:
 
 * **Paid** — the money has gone, so it comes off cash or bank straight away (or onto the card bill).
