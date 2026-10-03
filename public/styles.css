@@ -112,17 +112,6 @@ main { max-width: 1040px; margin: 0 auto; padding: 16px 20px 60px; }
 .bars .bar-fill.income { background: var(--green); }
 .bars .bar-fill.expense { background: var(--red); }
 
-.trend { display: flex; align-items: flex-end; gap: 10px; height: 190px; padding-top: 8px; overflow-x: auto; }
-.trend-month { flex: 1 1 0; min-width: 68px; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; }
-.trend-pair { flex: 1; display: flex; align-items: flex-end; gap: 5px; width: 100%; justify-content: center; }
-.trend-bar { width: 22px; border-radius: 5px 5px 0 0; min-height: 2px; }
-.trend-bar.income { background: var(--green); }
-.trend-bar.expense { background: var(--red); }
-.trend-label { color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
-.legend { color: var(--muted); font-size: 0.8rem; margin-top: 10px; display: flex; align-items: center; gap: 6px; }
-.key { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-.key-income { background: var(--green); }
-.key-expense { background: var(--red); margin-left: 10px; }
 
 table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--line); }
@@ -170,33 +159,6 @@ button.link:hover { text-decoration: underline; }
 
 .empty { color: var(--muted); font-size: 0.9rem; }
 
-/* Loans with friends */
-.loan {
-  border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 14px 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px;
-}
-.loan.settled { opacity: 0.75; }
-.loan-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
-.loan-name { font-weight: 700; margin-right: 8px; }
-.loan-amount { text-align: right; display: flex; flex-direction: column; }
-.loan-amount strong { font-size: 1.15rem; }
-.loan-actions { justify-content: flex-end; }
-
-.repayments { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.repayments li {
-  display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
-  font-size: 0.85rem; color: var(--muted); border-left: 2px solid var(--green); padding-left: 10px;
-}
-
-.repay-form {
-  display: flex; flex-direction: column; gap: 10px;
-  border-top: 1px solid var(--line); padding-top: 12px;
-}
-
-td.actions, .actions { display: flex; gap: 2px; flex-wrap: wrap; }
-button.link { color: var(--blue); }
-button.link.danger { color: var(--red); }
-
 /* Edit dialog */
 dialog {
   border: 1px solid var(--line); border-radius: var(--radius); padding: 20px;
@@ -233,26 +195,6 @@ dialog .field { margin-bottom: 12px; }
 .quick-btn:hover { color: var(--ink); border-color: var(--blue); }
 .quick-btn:active { transform: scale(0.94); }
 .quick-btn.clear { color: var(--red); }
-
-/* Tappable category breakdown */
-.breakdown-row { border-bottom: 1px solid var(--line); padding-bottom: 10px; }
-.breakdown-row:last-child { border-bottom: none; }
-.breakdown-toggle {
-  background: none; border: none; padding: 0; text-align: left;
-  color: var(--ink); font: inherit; display: inline-flex; align-items: center; gap: 6px;
-}
-.breakdown-toggle .chev { color: var(--muted); transition: transform 0.15s ease; display: inline-block; }
-.breakdown-row.open .breakdown-toggle .chev { transform: rotate(90deg); }
-.breakdown-detail { grid-column: 1 / -1; margin-top: 8px; }
-
-/* Months you can tap */
-.trend-month {
-  background: none; border: none; cursor: pointer; border-radius: 10px;
-  padding: 4px 2px; transition: background 0.15s ease;
-}
-.trend-month:hover { background: rgba(37, 99, 235, 0.1); }
-.trend-month.is-current { background: rgba(37, 99, 235, 0.14); }
-.trend-bar { transition: height 0.35s ease; }
 
 /* Toasts */
 .toasts {
@@ -291,23 +233,15 @@ h3 { display: flex; align-items: center; gap: 7px; }
   .tabs { padding: 10px 12px 0; gap: 4px; flex-wrap: wrap; overflow: visible; }
   .tab { padding: 8px 11px; font-size: 0.8rem; }
   main { padding: 14px 12px 80px; }
-  .trend { gap: 4px; height: 170px; }
-  .trend-month { min-width: 0; }
-  .trend-bar { width: 14px; }
-  .trend-label { font-size: 0.62rem; }
-  .tile-value { font-size: 1.3rem; }
+          .tile-value { font-size: 1.3rem; }
   .tile.hold .tile-value { font-size: 1.25rem; }
 }
 
-/* Borrowed money reads the other way round */
-.loan.borrowed { border-left: 3px solid #f59e0b; }
-.loan.lent { border-left: 3px solid var(--blue); }
-.loan.settled { border-left-color: var(--green); }
-.loan.borrowed .repayments li { border-left-color: #f59e0b; }
-
 /* "Repeat this" tick */
-.ends-field { margin-top: 12px; }
-.ends-field[hidden] { display: none; }
 
-.check { display: flex; align-items: center; gap: 9px; font-size: 0.88rem; cursor: pointer; }
-.check input { width: 18px; height: 18px; accent-color: var(--blue); }
+
+/* Start over */
+.panel.danger summary { cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.panel.danger[open] summary { margin-bottom: 10px; }
+.danger-btn { border-color: var(--red); color: var(--red); margin-top: 10px; }
+.danger-btn.armed { background: var(--red); color: #fff; border-color: var(--red); }

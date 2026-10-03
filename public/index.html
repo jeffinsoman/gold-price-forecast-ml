@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="light dark" />
-<title>Income vs Expense Tracker</title>
+<title>Income vs Expense</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%92%B0</text></svg>" />
 <link rel="stylesheet" href="/styles.css" />
 </head>
@@ -14,7 +14,7 @@
     <span class="brand-mark wide" id="brand-mark">AED</span>
     <div>
       <h1>Income vs Expense</h1>
-      <p class="brand-sub">Month by month, are you inside the budget?</p>
+      <p class="brand-sub">What came in, what went out, what is left.</p>
     </div>
   </div>
   <label class="currency">
@@ -24,20 +24,17 @@
 </header>
 
 <nav class="tabs" id="tabs">
-  <button class="tab is-active" data-page="dashboard"><span aria-hidden="true">📊</span> Dashboard</button>
+  <button class="tab is-active" data-page="month"><span aria-hidden="true">📊</span> Month</button>
   <button class="tab" data-page="income"><span aria-hidden="true">💰</span> Income</button>
   <button class="tab" data-page="expense"><span aria-hidden="true">🧾</span> Expense</button>
-  <button class="tab" data-page="repeat"><span aria-hidden="true">🔁</span> Repeat</button>
-  <button class="tab" data-page="friends"><span aria-hidden="true">🤝</span> Friends</button>
-  <button class="tab" data-page="transactions"><span aria-hidden="true">📋</span> History</button>
 </nav>
 
 <main>
-  <!-- DASHBOARD -->
-  <section id="page-dashboard" class="page">
+  <!-- MONTH -->
+  <section id="page-month" class="page">
     <div class="row between">
-      <h2>Dashboard</h2>
-      <label class="field inline">Month <select id="dash-month"></select></label>
+      <h2>Monthly balance</h2>
+      <label class="field inline">Month <select id="month-picker"></select></label>
     </div>
 
     <div id="status-card" class="status-card">
@@ -45,59 +42,38 @@
       <p class="status-detail"></p>
     </div>
 
-    <div class="tiles holdings">
-      <div class="tile hold"><span class="tile-label"><span aria-hidden="true">💵</span> Cash in Hand</span><span class="tile-value" id="tile-cash">—</span><span class="tile-foot" id="tile-cash-foot"></span></div>
-      <div class="tile hold"><span class="tile-label"><span aria-hidden="true">🏦</span> Bank</span><span class="tile-value" id="tile-bank">—</span><span class="tile-foot" id="tile-bank-foot"></span></div>
-    </div>
-    <p class="muted small" id="lending-line"></p>
-
     <div class="tiles">
       <div class="tile"><span class="tile-label"><span aria-hidden="true">🔄</span> Carried forward</span><span class="tile-value" id="tile-carried">—</span><span class="tile-foot" id="tile-carried-foot"></span></div>
       <div class="tile"><span class="tile-label"><span aria-hidden="true">💰</span> Income</span><span class="tile-value" id="tile-income">—</span></div>
-      <div class="tile"><span class="tile-label"><span aria-hidden="true">🧾</span> Expense</span><span class="tile-value" id="tile-expense">—</span><span class="tile-foot" id="tile-upcoming"></span></div>
-      <div class="tile"><span class="tile-label"><span aria-hidden="true">🪙</span> Balance left</span><span class="tile-value" id="tile-balance">—</span><span class="tile-foot" id="tile-balance-foot"></span></div>
-      <div class="tile" id="tile-budget-card" hidden><span class="tile-label" id="tile-budget-label"><span aria-hidden="true">🎯</span> Budget left</span><span class="tile-value" id="tile-budget">—</span></div>
+      <div class="tile"><span class="tile-label"><span aria-hidden="true">🧾</span> Expense</span><span class="tile-value" id="tile-expense">—</span></div>
+      <div class="tile hold"><span class="tile-label"><span aria-hidden="true">🪙</span> Balance left</span><span class="tile-value" id="tile-balance">—</span><span class="tile-foot" id="tile-balance-foot"></span></div>
     </div>
 
-    <div class="meter"><div class="meter-fill" id="budget-meter"></div></div>
-    <p class="muted small" id="budget-note"></p>
+    <div class="meter"><div class="meter-fill" id="meter"></div></div>
+    <p class="muted small" id="month-note"></p>
 
-    <div class="split">
-      <div class="panel">
-        <h3><span aria-hidden="true">👛</span> Where it sits</h3>
-        <ul class="bars" id="account-balances"></ul>
-      </div>
-      <div class="panel">
-        <h3><span aria-hidden="true">💰</span> Income by account</h3>
-        <ul class="bars" id="income-split"></ul>
-      </div>
-      <div class="panel">
-        <h3><span aria-hidden="true">🧾</span> Expense by payment method</h3>
-        <ul class="bars" id="expense-split"></ul>
-      </div>
+    <div class="panel">
+      <h3><span aria-hidden="true">💰</span> Income this month <span class="pill" id="income-count">0</span></h3>
+      <div id="month-income"></div>
     </div>
 
     <div class="panel">
-      <h3><span aria-hidden="true">🔍</span> Where it went <span class="pill">tap a row</span></h3>
-      <ul class="bars breakdown" id="category-breakdown"></ul>
+      <h3><span aria-hidden="true">🧾</span> Expenses this month <span class="pill" id="expense-count">0</span></h3>
+      <div id="month-expenses"></div>
     </div>
 
-    <div class="panel">
-      <h3><span aria-hidden="true">📈</span> Last 6 months <span class="pill">tap a month</span></h3>
-      <div class="trend" id="trend"></div>
-      <p class="legend"><span class="key key-income"></span>Income <span class="key key-expense"></span>Expense</p>
-    </div>
-
-    <div class="panel">
-      <h3><span aria-hidden="true">📅</span> Upcoming expenses <span class="pill" id="upcoming-count">0</span></h3>
-      <div id="upcoming"></div>
-    </div>
+    <details class="panel danger">
+      <summary><span aria-hidden="true">⚠️</span> Start over</summary>
+      <p class="muted small">Deletes every income and expense entry, for every month. There is no undo.</p>
+      <button class="ghost danger-btn" id="reset-btn">Delete everything</button>
+      <p class="form-msg" id="reset-msg"></p>
+    </details>
   </section>
 
   <!-- ADD INCOME -->
   <section id="page-income" class="page hidden">
     <h2>Add income</h2>
-    <p class="muted">Pick the date and where the money landed.</p>
+    <p class="muted">Money that came in, and where it landed.</p>
     <form id="income-form" class="card form">
       <div class="grid">
         <label class="field">Date <input type="date" name="date" required /></label>
@@ -108,32 +84,21 @@
         <legend>Received in</legend>
         <div class="choices" id="income-accounts"></div>
       </fieldset>
-      <div class="grid">
-        <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
-      </div>
       <fieldset class="field">
         <legend>Category</legend>
         <div class="chips" id="income-categories"></div>
       </fieldset>
-      <label class="check"><input type="checkbox" name="repeat" /> <span><span aria-hidden="true">🔁</span> Repeat this every month on the same day</span></label>
+      <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
       <button class="primary" type="submit">Save income</button>
       <p class="form-msg" id="income-msg"></p>
     </form>
-    <div class="panel"><h3>Recent income</h3><div id="income-recent"></div></div>
   </section>
 
   <!-- ADD EXPENSE -->
   <section id="page-expense" class="page hidden">
     <h2>Add expense</h2>
-    <p class="muted">Spent today, or due later — a future date is booked into that month and shown as upcoming.</p>
+    <p class="muted">Money that went out. Date it today, or later for something due.</p>
     <form id="expense-form" class="card form">
-      <fieldset class="field">
-        <legend>When</legend>
-        <div class="choices" id="expense-when">
-          <label class="choice"><input type="radio" name="when" value="today" checked /><span>Today</span></label>
-          <label class="choice"><input type="radio" name="when" value="future" /><span>Future date</span></label>
-        </div>
-      </fieldset>
       <div class="grid">
         <label class="field">Date <input type="date" name="date" required /></label>
         <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" placeholder="5000" required />
@@ -143,152 +108,14 @@
         <legend>Paid by</legend>
         <div class="choices" id="expense-methods"></div>
       </fieldset>
-      <div class="grid">
-        <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
-      </div>
       <fieldset class="field">
         <legend>Category</legend>
         <div class="chips" id="expense-categories"></div>
       </fieldset>
-      <label class="check"><input type="checkbox" name="repeat" /> <span><span aria-hidden="true">🔁</span> Repeat this every month on the same day</span></label>
+      <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
       <button class="primary" type="submit">Save expense</button>
       <p class="form-msg" id="expense-msg"></p>
     </form>
-    <div class="panel"><h3>Recent expenses</h3><div id="expense-recent"></div></div>
-  </section>
-
-  <!-- REPEAT -->
-  <section id="page-repeat" class="page hidden">
-    <h2>Repeating every month</h2>
-    <p class="muted">Salary, rent, EMI, subscriptions — set it once and the entry is written each month, on the day you pick. Anything written stays an ordinary entry you can edit or delete.</p>
-
-    <div class="tiles">
-      <div class="tile"><span class="tile-label"><span aria-hidden="true">💰</span> Income a month</span><span class="tile-value" id="tile-repeat-income">—</span></div>
-      <div class="tile"><span class="tile-label"><span aria-hidden="true">🧾</span> Payments a month</span><span class="tile-value" id="tile-repeat-expense">—</span></div>
-      <div class="tile"><span class="tile-label"><span aria-hidden="true">⚖️</span> Left over</span><span class="tile-value" id="tile-repeat-net">—</span><span class="tile-foot">before anything else</span></div>
-    </div>
-
-    <form id="repeat-form" class="card form">
-      <fieldset class="field">
-        <legend>What repeats?</legend>
-        <div class="choices" id="repeat-kind">
-          <label class="choice"><input type="radio" name="kind" value="income" checked /><span><span aria-hidden="true">💰</span> Income</span></label>
-          <label class="choice"><input type="radio" name="kind" value="expense" /><span><span aria-hidden="true">🧾</span> Payment</span></label>
-        </div>
-      </fieldset>
-      <div class="grid">
-        <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" placeholder="8000" required />
-          <span class="quick" data-quick="repeat"></span></label>
-        <label class="field">Day of the month <input type="number" name="day" min="1" max="31" value="1" required />
-          <span class="muted small">The 31st falls back to the last day in shorter months.</span></label>
-      </div>
-      <fieldset class="field">
-        <legend id="repeat-account-legend">Received in</legend>
-        <div class="chips" id="repeat-accounts"></div>
-      </fieldset>
-      <fieldset class="field">
-        <legend>Category</legend>
-        <div class="chips" id="repeat-categories"></div>
-      </fieldset>
-      <label class="field">Starts <input type="month" name="startMonth" required /></label>
-      <fieldset class="field">
-        <legend>When does it end?</legend>
-        <div class="choices" id="repeat-ends">
-          <label class="choice"><input type="radio" name="ends" value="never" checked /><span><span aria-hidden="true">♾️</span> Never</span></label>
-          <label class="choice"><input type="radio" name="ends" value="count" /><span><span aria-hidden="true">🔢</span> After N payments</span></label>
-          <label class="choice"><input type="radio" name="ends" value="month" /><span><span aria-hidden="true">📅</span> On a month</span></label>
-        </div>
-        <label class="field ends-field" id="ends-count" hidden>How many payments in total?
-          <input type="number" name="payments" min="1" max="600" placeholder="24" />
-          <span class="muted small" id="ends-hint"></span>
-        </label>
-        <label class="field ends-field" id="ends-month" hidden>Last month
-          <input type="month" name="endMonth" />
-        </label>
-      </fieldset>
-      <label class="field">Note <input type="text" name="note" maxlength="200" placeholder="Monthly salary" /></label>
-      <button class="primary" type="submit">Save repeat</button>
-      <p class="form-msg" id="repeat-msg"></p>
-    </form>
-
-    <div class="panel">
-      <h3><span aria-hidden="true">🔁</span> Standing rules <span class="pill" id="repeat-count">0</span></h3>
-      <div id="repeat-list"></div>
-    </div>
-  </section>
-
-  <!-- FRIENDS -->
-  <section id="page-friends" class="page hidden">
-    <h2>Money with friends</h2>
-    <p class="muted">Both directions: what you have lent out, and what you have taken from someone. Either can be paid back in full or a bit at a time. Every movement here is booked on the Income or Expense side automatically, so the dashboard balance already counts it.</p>
-
-    <div class="tiles">
-      <div class="tile"><span class="tile-label"><span aria-hidden="true">🤝</span> They owe you</span><span class="tile-value" id="tile-owed-you">—</span><span class="tile-foot" id="tile-owed-you-foot"></span></div>
-      <div class="tile"><span class="tile-label"><span aria-hidden="true">🙏</span> You owe</span><span class="tile-value" id="tile-you-owe">—</span><span class="tile-foot" id="tile-you-owe-foot"></span></div>
-      <div class="tile"><span class="tile-label"><span aria-hidden="true">⚖️</span> Net position</span><span class="tile-value" id="tile-net">—</span><span class="tile-foot" id="tile-net-foot"></span></div>
-    </div>
-
-    <form id="loan-form" class="card form">
-      <fieldset class="field">
-        <legend>Which way?</legend>
-        <div class="choices" id="loan-direction">
-          <label class="choice"><input type="radio" name="direction" value="lent" checked /><span><span aria-hidden="true">🤝</span> I lent money</span></label>
-          <label class="choice"><input type="radio" name="direction" value="borrowed" /><span><span aria-hidden="true">🙏</span> I borrowed money</span></label>
-        </div>
-      </fieldset>
-      <div class="grid">
-        <label class="field"><span id="loan-friend-label">Lent to</span> <input type="text" name="friend" maxlength="60" placeholder="Name" required /></label>
-        <label class="field">Date <input type="date" name="date" required /></label>
-      </div>
-      <div class="grid">
-        <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" placeholder="500" required />
-          <span class="quick" data-quick="loan"></span></label>
-        <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
-      </div>
-      <fieldset class="field">
-        <legend id="loan-account-legend">Paid from</legend>
-        <div class="chips" id="loan-sources"></div>
-      </fieldset>
-      <button class="primary" type="submit" id="loan-submit">Save loan</button>
-      <p class="form-msg" id="loan-msg"></p>
-    </form>
-
-    <div class="panel">
-      <h3><span aria-hidden="true">🤝</span> They owe you <span class="pill" id="loan-count-lent">0</span></h3>
-      <div id="loan-list-lent"></div>
-    </div>
-
-    <div class="panel">
-      <h3><span aria-hidden="true">🙏</span> You owe <span class="pill" id="loan-count-borrowed">0</span></h3>
-      <div id="loan-list-borrowed"></div>
-    </div>
-
-    <div class="panel">
-      <h3><span aria-hidden="true">✅</span> Settled</h3>
-      <div id="loan-settled"></div>
-    </div>
-  </section>
-
-  <!-- TRANSACTIONS -->
-  <section id="page-transactions" class="page hidden">
-    <div class="row between">
-      <h2>Transactions</h2>
-      <label class="field inline">Month <select id="tx-month"></select></label>
-    </div>
-
-    <div class="card">
-      <h3>Budget for this month</h3>
-      <p class="muted small" id="budget-help"></p>
-      <div class="row wrap">
-        <input type="number" id="budget-input" min="0" step="100" placeholder="Custom budget" />
-        <button class="primary" id="budget-save">Save budget</button>
-        <button class="ghost" id="budget-clear">Use this month's income</button>
-      </div>
-      <p class="form-msg" id="budget-msg"></p>
-    </div>
-
-    <div class="panel"><h3>Income</h3><div id="tx-income"></div></div>
-    <div class="panel"><h3>Expenses</h3><div id="tx-expenses"></div></div>
   </section>
 </main>
 
@@ -299,7 +126,7 @@
     <h3 id="edit-title">Edit</h3>
     <div id="edit-fields"></div>
     <div class="row wrap">
-      <button class="primary" type="submit" value="save">Save changes</button>
+      <button class="primary" type="submit">Save changes</button>
       <button class="ghost" type="button" id="edit-cancel">Cancel</button>
     </div>
     <p class="form-msg" id="edit-msg"></p>
