@@ -526,6 +526,8 @@ async function loadMonth(month) {
       : [empty("No card payments in this month.")]),
   );
 
+  showTabby(data.tabby ?? { outstanding: 0, monthly: 0, left: 0, paidThisMonth: 0, stillDueThisMonth: 0 });
+
   const opening = accounts.opening ?? {};
   const openingForm = $("opening-form");
   openingForm.elements["Cash in Hand"].value = opening["Cash in Hand"] || "";
@@ -653,6 +655,72 @@ function bindEntryForm(kind) {
       await loadMonth(state.month);
     } catch (error) {
       message($(`${kind}-msg`), error.message, false);
+    }
+  });
+}
+
+// The Tabby plan: a total already owed, and the instalment this month's money
+// has to cover. Recording it writes an ordinary expense, so it counts against
+// the month like any other payment and can be edited or deleted from the list.
+function showTabby(plan) {
+  const form = $("tabby-form");
+  const pay = $("tabby-pay");
+  form.outstanding.value = plan.outstanding || "";
+  form.monthly.value = plan.monthly || "";
+  pay.date.value = state.today;
+  const due = plan.stillDueThisMonth || plan.monthly;
+  pay.amount.value = due ? due : "";
+  pay.hidden = !(plan.outstanding > 0 || plan.monthly > 0);
+
+  const label = shortMonth(state.month);
+  const parts = [];
+  if (plan.outstanding > 0) {
+    parts.push(plan.left > 0 ? `${money(plan.left)} left of ${money(plan.outstanding)}` : "Plan cleared");
+  }
+  if (plan.stillDueThisMonth > 0) parts.push(`${money(plan.stillDueThisMonth)} due in ${label}`);
+  else if (plan.paidThisMonth > 0) parts.push(`${label} covered · ${money(plan.paidThisMonth)} paid`);
+  $("tabby-state").textContent = parts.join(" · ");
+  // The saved-plan note goes stale the moment a payment moves the numbers.
+  $("tabby-msg").textContent = "";
+}
+
+function bindTabbyForms() {
+  const form = $("tabby-form");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const body = Object.fromEntries(new FormData(form).entries());
+    try {
+      const result = await api("/tabby", { method: "PUT", body: JSON.stringify(body) });
+      const plan = result.tabby;
+      message($("tabby-msg"), `Tabby plan saved: ${money(plan.left)} left, ${money(plan.monthly)} a month.`);
+      toast(`🧿 Tabby: ${money(plan.left)} left, ${money(plan.monthly)} a month.`);
+      await loadMonth(state.month);
+    } catch (error) {
+      message($("tabby-msg"), error.message, false);
+    }
+  });
+
+  const pay = $("tabby-pay");
+  pay.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      const result = await api("/expense", {
+        method: "POST",
+        body: JSON.stringify({
+          date: pay.date.value,
+          amount: pay.amount.value,
+          method: pay.querySelector('input[name="method"]:checked')?.value ?? "Bank",
+          category: "Tabby",
+          note: "Tabby instalment",
+          paid: 1,
+        }),
+      });
+      const text = `🧿 Paid ${money(result.entry.amount)} to Tabby from ${result.entry.method}.`;
+      message($("tabby-pay-msg"), `${text} ${money(result.tabby.left)} left on the plan.`);
+      toast(`${text} ${result.summary.statusMessage}.`, result.summary.isOverBudget ? "bad" : "ok");
+      await loadMonth(state.month);
+    } catch (error) {
+      message($("tabby-pay-msg"), error.message, false);
     }
   });
 }
@@ -785,6 +853,7 @@ async function boot() {
   fillChoices($("income-accounts"), state.options.incomeAccounts, "account");
   fillChoices($("expense-methods"), state.options.expenseMethods, "method");
   fillChoices($("expense-cards"), state.options.cards ?? [], "card");
+  fillChoices($("tabby-accounts"), ["Cash", "Bank"], "method", "Bank");
   syncCardField($("expense-form"), $("expense-card-field"));
   fillChips($("income-categories"), state.options.incomeCategories, "category");
   fillChips($("expense-categories"), state.options.expenseCategories, "category");
@@ -802,6 +871,7 @@ async function boot() {
       syncCardField($("expense-form"), $("expense-card-field")),
     );
     bindOpeningForm();
+    bindTabbyForms();
     bindCardForm();
     bindReset();
     $("month-picker").addEventListener("change", (event) => loadMonth(event.target.value));

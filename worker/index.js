@@ -9,6 +9,9 @@ import {
   CARDS,
   LEGACY_CARD,
   cardName,
+  TABBY_CATEGORY,
+  tabbyPlan,
+  validateTabbyPlan,
   INCOME_ACCOUNTS as ACCOUNTS,
   accountBalances,
   addMonths,
@@ -141,6 +144,24 @@ async function held(db, month) {
   };
 }
 
+/** The Tabby plan: the stored numbers, plus what has been paid off so far. */
+async function tabby(db, month) {
+  const [stored, paid] = await db.batch([
+    db.prepare("SELECT key, value FROM settings WHERE key IN ('tabby:outstanding', 'tabby:monthly')"),
+    db
+      .prepare("SELECT month, SUM(amount) AS total FROM expense WHERE category = ?1 AND paid = 1 GROUP BY month")
+      .bind(TABBY_CATEGORY),
+  ]);
+
+  const settings = Object.fromEntries(stored.results.map((row) => [row.key, Number(row.value) || 0]));
+  return tabbyPlan({
+    outstanding: settings["tabby:outstanding"],
+    monthly: settings["tabby:monthly"],
+    paidRows: paid.results,
+    month,
+  });
+}
+
 /** What is still owed on each bill, across every month. */
 async function billsPending(db) {
   const [charged, paid] = await db.batch([
@@ -165,13 +186,14 @@ async function friends(db) {
 }
 
 async function monthData(db, month) {
-  const [income, expense, accounts, withFriends, payments, pending] = await Promise.all([
+  const [income, expense, accounts, withFriends, payments, pending, plan] = await Promise.all([
     db.prepare("SELECT * FROM income WHERE month = ?1 ORDER BY date DESC, id DESC").bind(month).all(),
     db.prepare("SELECT * FROM expense WHERE month = ?1 ORDER BY date DESC, id DESC").bind(month).all(),
     held(db, month),
     friends(db),
     db.prepare("SELECT * FROM card_payment WHERE month = ?1 ORDER BY date DESC, id DESC").bind(month).all(),
     billsPending(db),
+    tabby(db, month),
   ]);
 
   const total = (rows) => rows.reduce((sum, row) => sum + Number(row.amount), 0);
@@ -197,6 +219,7 @@ async function monthData(db, month) {
       bills: accounts.bills.map((bill) => ({ ...bill, pendingAllTime: pending[bill.card] ?? 0 })),
     },
     billPayments: payments.results,
+    tabby: plan,
     friends: withFriends,
   };
 }
@@ -317,6 +340,26 @@ async function handleApi(request, env, url) {
       ),
     );
     return json({ opening, ...(await monthData(db, monthKey(today()))) });
+  }
+
+  // GET|PUT /api/tabby - the total owed to Tabby and the monthly instalment.
+  if (method === "GET" && path === "tabby") {
+    return json({ tabby: await tabby(db, monthKey(today())) });
+  }
+
+  if (method === "PUT" && path === "tabby") {
+    const plan = validateTabbyPlan(await readJson(request));
+    await db.batch(
+      Object.entries(plan).map(([key, amount]) =>
+        db
+          .prepare(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)" +
+              " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+          )
+          .bind(`tabby:${key}`, String(amount)),
+      ),
+    );
+    return json(await monthData(db, monthKey(today())));
   }
 
   // POST /api/bill-payments - settle some of a card or Tabby bill from the bank.

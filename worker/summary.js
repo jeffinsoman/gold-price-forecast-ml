@@ -45,7 +45,12 @@ export const EXPENSE_CATEGORIES = [
   "Active EMI CBD",
   "Active EMI Mashreq",
   "Active EMI DIB",
+  "Tabby",
 ];
+
+// Tabby is also a plan: a total already owed, paid down month by month. Every
+// expense filed under this category is one of those payments.
+export const TABBY_CATEGORY = "Tabby";
 
 // Categories used before the list above. Entries already filed under them keep
 // their category when edited, even though the pickers no longer offer them.
@@ -303,6 +308,41 @@ export function accountBalances({
     billsPending: round(bills.reduce((sum, bill) => sum + bill.pending, 0)),
     total: round(Object.values(balances).reduce((sum, value) => sum + value, 0)),
   };
+}
+
+/**
+ * The Tabby plan: what was owed to start with, what the month's instalment is,
+ * and how much of it the expenses filed under Tabby have paid off.
+ */
+export function tabbyPlan({ outstanding = 0, monthly = 0, paidRows = [], month } = {}) {
+  const round = (value) => Math.round(value * 100) / 100;
+  const paid = round(paidRows.reduce((sum, row) => sum + (Number(row.total ?? row.amount) || 0), 0));
+  const thisMonth = round(
+    paidRows
+      .filter((row) => row.month === month)
+      .reduce((sum, row) => sum + (Number(row.total ?? row.amount) || 0), 0),
+  );
+  const total = round(Number(outstanding) || 0);
+  const due = round(Number(monthly) || 0);
+  return {
+    outstanding: total,
+    monthly: due,
+    paid,
+    left: round(Math.max(total - paid, 0)),
+    paidThisMonth: thisMonth,
+    stillDueThisMonth: round(Math.max(Math.min(due, round(total - paid)) - thisMonth, 0)),
+  };
+}
+
+/** The two numbers behind the plan, both plain and never negative. */
+export function validateTabbyPlan(body) {
+  const read = (key, label) => {
+    const raw = body?.[key];
+    const amount = raw === "" || raw === null || raw === undefined ? 0 : Number(raw);
+    if (!Number.isFinite(amount) || amount < 0) throw new Error(`${label} must be zero or more.`);
+    return Math.round(amount * 100) / 100;
+  };
+  return { outstanding: read("outstanding", "Total outstanding"), monthly: read("monthly", "Monthly payment") };
 }
 
 /** An opening balance is a plain number per account, and may be negative. */

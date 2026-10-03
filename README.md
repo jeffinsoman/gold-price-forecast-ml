@@ -83,6 +83,12 @@ Pushing to `main` deploys automatically through Workers Builds.
 ### 🏠 Dashboard
 * **Cash in hand** and **Bank**, counted from every entry up to the end of the month shown, on top of
   the **opening balance** you set once for each account.
+* **Tabby plan** — what you still owe Tabby in total and the instalment for this month. Saving the
+  plan is just two numbers; **Record this month's payment** writes an ordinary expense under the
+  **Tabby** category, so the instalment comes out of this month's money and shows in the month's
+  expense like everything else. The plan line says what is left of the total and whether this month
+  is covered. The payment is a normal entry: edit or delete it from the expense list and the plan
+  follows.
 * **A pending bill per card** — Mashreq, ADCB, CBD, DIB and Tabby. Putting a spend on credit does
   not move money out of the bank: it sits on that card until you settle it. *Pay a card from the
   bank* asks which card and takes the whole bill or part of it, and only then does the bank balance
@@ -101,7 +107,7 @@ deletable.
 
 Expense categories are the loans, EMIs and outstandings you keep track of — ADCB Loan, CBD EMI,
 Mashreq EMI, ADCB EMI, DIB EMI, Home pay, Friend, Food, ADCB Outstanding, CBD Outstanding, Mashreq
-Outstanding, Entertainment, Other, and Active EMI for ADCB, CBD, Mashreq and DIB. An entry filed
+Outstanding, Entertainment, Other, Active EMI for ADCB, CBD, Mashreq and DIB, and Tabby. An entry filed
 under an older category keeps it when you edit it.
 
 Both sides say whether the money has actually moved:
@@ -155,6 +161,7 @@ At the foot of the Dashboard: deletes every entry in every month, two taps, no u
 | POST | `/api/income` · `/api/expense` | `{ date, amount, account \| method, card, category, friend, note }` |
 | PATCH · DELETE | `/api/income/:id` · `/api/expense/:id` | Edit or remove an entry |
 | GET · PUT | `/api/opening` | The opening balance per account |
+| GET · PUT | `/api/tabby` | `{ outstanding, monthly }` — the Tabby plan |
 | POST | `/api/bill-payments` | `{ card, date, amount, note }` — settles one card's bill from the bank |
 | DELETE | `/api/bill-payments/:id` | Undo a card payment |
 | POST | `/api/reset` | `{ "confirm": "RESET" }` — empties the tracker |
