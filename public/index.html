@@ -4,144 +4,168 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="light dark" />
-<title>Income vs Expense</title>
+<title>Money</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%92%B0</text></svg>" />
 <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
 <header class="topbar">
-  <div class="brand">
-    <span class="brand-mark wide" id="brand-mark">AED</span>
-    <div>
-      <h1>Income vs Expense</h1>
-      <p class="brand-sub">What came in, what went out, what is left.</p>
-    </div>
+  <div class="greeting">
+    <p class="eyebrow" id="eyebrow">This month</p>
+    <h1 id="month-title">—</h1>
   </div>
-  <label class="currency">
-    Currency
-    <input id="currency" type="text" maxlength="4" value="AED" />
-  </label>
+  <div class="topbar-controls">
+    <label class="sr-only" for="month-picker">Month</label>
+    <select id="month-picker"></select>
+    <input id="currency" type="text" maxlength="4" value="AED" aria-label="Currency" />
+  </div>
 </header>
 
-<nav class="tabs" id="tabs">
-  <button class="tab is-active" data-page="month"><span aria-hidden="true">📊</span> Month</button>
-  <button class="tab" data-page="income"><span aria-hidden="true">💰</span> Income</button>
-  <button class="tab" data-page="expense"><span aria-hidden="true">🧾</span> Expense</button>
+<nav class="tabbar" id="tabs">
+  <button class="tab is-active" data-page="dashboard"><span aria-hidden="true">🏠</span><span>Dashboard</span></button>
+  <button class="tab" data-page="income"><span aria-hidden="true">💰</span><span>Income</span></button>
+  <button class="tab" data-page="expense"><span aria-hidden="true">🧾</span><span>Expense</span></button>
+  <button class="tab" data-page="friends"><span aria-hidden="true">🤝</span><span>Friends</span></button>
 </nav>
 
 <main>
-  <!-- MONTH -->
-  <section id="page-month" class="page">
-    <div class="row between">
-      <h2>Monthly balance</h2>
-      <label class="field inline">Month <select id="month-picker"></select></label>
+  <!-- DASHBOARD -->
+  <section id="page-dashboard" class="page">
+    <article class="hero" id="hero">
+      <p class="hero-label">Balance this month</p>
+      <p class="hero-value" id="hero-balance">—</p>
+      <p class="hero-sum" id="hero-sum">income − expense</p>
+      <div class="hero-split">
+        <div><span class="dot in"></span><span class="hero-split-label">In</span><span class="hero-split-value" id="hero-income">—</span></div>
+        <div><span class="dot out"></span><span class="hero-split-label">Out</span><span class="hero-split-value" id="hero-expense">—</span></div>
+      </div>
+      <div class="hero-bar"><span id="hero-bar-fill"></span></div>
+      <p class="hero-note" id="hero-note"></p>
+    </article>
+
+    <div class="wallets">
+      <article class="wallet">
+        <span class="wallet-icon" aria-hidden="true">💵</span>
+        <div>
+          <p class="wallet-label">Cash in hand</p>
+          <p class="wallet-value" id="wallet-cash">—</p>
+        </div>
+      </article>
+      <article class="wallet">
+        <span class="wallet-icon" aria-hidden="true">🏦</span>
+        <div>
+          <p class="wallet-label">Bank</p>
+          <p class="wallet-value" id="wallet-bank">—</p>
+        </div>
+      </article>
     </div>
+    <p class="muted tiny" id="wallet-note"></p>
 
-    <div id="status-card" class="status-card">
-      <p class="status-headline">Loading…</p>
-      <p class="status-detail"></p>
-    </div>
+    <section class="card">
+      <header class="card-head">
+        <h2><span class="dot in"></span> Income</h2>
+        <span class="card-total in" id="dash-income-total">—</span>
+      </header>
+      <ul class="lines" id="dash-income"></ul>
+    </section>
 
-    <div class="tiles">
-      <div class="tile"><span class="tile-label"><span aria-hidden="true">🔄</span> Carried forward</span><span class="tile-value" id="tile-carried">—</span><span class="tile-foot" id="tile-carried-foot"></span></div>
-      <div class="tile"><span class="tile-label"><span aria-hidden="true">💰</span> Income</span><span class="tile-value" id="tile-income">—</span></div>
-      <div class="tile"><span class="tile-label"><span aria-hidden="true">🧾</span> Expense</span><span class="tile-value" id="tile-expense">—</span></div>
-      <div class="tile hold"><span class="tile-label"><span aria-hidden="true">🪙</span> Balance left</span><span class="tile-value" id="tile-balance">—</span><span class="tile-foot" id="tile-balance-foot"></span></div>
-    </div>
+    <section class="card">
+      <header class="card-head">
+        <h2><span class="dot out"></span> Expense</h2>
+        <span class="card-total out" id="dash-expense-total">—</span>
+      </header>
+      <ul class="lines" id="dash-expense"></ul>
+    </section>
 
-    <div class="meter"><div class="meter-fill" id="meter"></div></div>
-    <p class="muted small" id="month-note"></p>
+    <section class="card balance-card">
+      <header class="card-head">
+        <h2>Balance</h2>
+        <span class="card-total" id="dash-balance">—</span>
+      </header>
+      <p class="muted tiny" id="dash-balance-note"></p>
+    </section>
 
-    <div class="panel">
-      <h3><span aria-hidden="true">💰</span> Income this month <span class="pill" id="income-count">0</span></h3>
-      <div id="month-income"></div>
-    </div>
-
-    <div class="panel">
-      <h3><span aria-hidden="true">🧾</span> Expenses this month <span class="pill" id="expense-count">0</span></h3>
-      <div id="month-expenses"></div>
-    </div>
-
-    <div class="panel" id="friends-panel" hidden>
-      <h3><span aria-hidden="true">🤝</span> With friends <span class="pill" id="friends-count">0</span></h3>
-      <div id="friends-list"></div>
-      <p class="muted small">Tag an expense with a name when money goes to someone, and tag the income when it comes back.</p>
-    </div>
-
-    <details class="panel danger">
-      <summary><span aria-hidden="true">⚠️</span> Start over</summary>
-      <p class="muted small">Deletes every income and expense entry, for every month. There is no undo.</p>
-      <button class="ghost danger-btn" id="reset-btn">Delete everything</button>
+    <details class="card danger">
+      <summary>Start over</summary>
+      <p class="muted tiny">Deletes every entry in every month. There is no undo.</p>
+      <button class="btn ghost danger-btn" id="reset-btn">Delete everything</button>
       <p class="form-msg" id="reset-msg"></p>
     </details>
   </section>
 
-  <!-- ADD INCOME -->
+  <!-- INCOME -->
   <section id="page-income" class="page hidden">
-    <h2>Add income</h2>
-    <p class="muted">Money that came in, and where it landed.</p>
     <form id="income-form" class="card form">
+      <h2>Add income</h2>
       <div class="grid">
         <label class="field">Date <input type="date" name="date" required /></label>
-        <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" placeholder="9000" required />
+        <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="9000" required />
           <span class="quick" data-quick="income"></span></label>
       </div>
-      <fieldset class="field">
-        <legend>Received in</legend>
-        <div class="choices" id="income-accounts"></div>
-      </fieldset>
-      <fieldset class="field">
-        <legend>Category</legend>
-        <div class="chips" id="income-categories"></div>
-      </fieldset>
+      <fieldset class="field"><legend>Received in</legend><div class="choices" id="income-accounts"></div></fieldset>
+      <fieldset class="field"><legend>Category</legend><div class="chips" id="income-categories"></div></fieldset>
       <div class="grid">
-        <label class="field">Friend (optional) <input type="text" name="friend" maxlength="60" list="friend-names" placeholder="Who paid you back?" /></label>
+        <label class="field">Friend (optional) <input type="text" name="friend" maxlength="60" list="friend-names" placeholder="Who paid you?" /></label>
         <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
       </div>
-      <button class="primary" type="submit">Save income</button>
+      <button class="btn primary in" type="submit">Save income</button>
       <p class="form-msg" id="income-msg"></p>
     </form>
+
+    <section class="card">
+      <header class="card-head"><h2>This month</h2><span class="card-total in" id="income-total">—</span></header>
+      <div id="income-list"></div>
+    </section>
   </section>
 
-  <!-- ADD EXPENSE -->
+  <!-- EXPENSE -->
   <section id="page-expense" class="page hidden">
-    <h2>Add expense</h2>
-    <p class="muted">Money that went out. Date it today, or later for something due.</p>
     <form id="expense-form" class="card form">
+      <h2>Add expense</h2>
       <div class="grid">
         <label class="field">Date <input type="date" name="date" required /></label>
-        <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" placeholder="5000" required />
+        <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="5000" required />
           <span class="quick" data-quick="expense"></span></label>
       </div>
-      <fieldset class="field">
-        <legend>Paid by</legend>
-        <div class="choices" id="expense-methods"></div>
-      </fieldset>
-      <fieldset class="field">
-        <legend>Category</legend>
-        <div class="chips" id="expense-categories"></div>
-      </fieldset>
+      <fieldset class="field"><legend>Paid by</legend><div class="choices" id="expense-methods"></div></fieldset>
+      <fieldset class="field"><legend>Category</legend><div class="chips" id="expense-categories"></div></fieldset>
       <div class="grid">
         <label class="field">Friend (optional) <input type="text" name="friend" maxlength="60" list="friend-names" placeholder="Who did it go to?" /></label>
         <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
       </div>
-      <button class="primary" type="submit">Save expense</button>
+      <button class="btn primary out" type="submit">Save expense</button>
       <p class="form-msg" id="expense-msg"></p>
     </form>
+
+    <section class="card">
+      <header class="card-head"><h2>This month</h2><span class="card-total out" id="expense-total">—</span></header>
+      <div id="expense-list"></div>
+    </section>
+  </section>
+
+  <!-- FRIENDS -->
+  <section id="page-friends" class="page hidden">
+    <section class="card">
+      <header class="card-head">
+        <h2>With friends</h2>
+        <span class="card-total" id="friends-net">—</span>
+      </header>
+      <p class="muted tiny">Put a name on an expense when money goes out to someone, and on the income when it comes back. Every month counts towards this.</p>
+      <ul class="lines" id="friends-list"></ul>
+    </section>
   </section>
 </main>
 
 <datalist id="friend-names"></datalist>
-
 <div id="toasts" class="toasts" aria-live="polite"></div>
 
 <dialog id="edit-dialog">
   <form id="edit-form" class="form" method="dialog">
-    <h3 id="edit-title">Edit</h3>
+    <h2 id="edit-title">Edit</h2>
     <div id="edit-fields"></div>
-    <div class="row wrap">
-      <button class="primary" type="submit">Save changes</button>
-      <button class="ghost" type="button" id="edit-cancel">Cancel</button>
+    <div class="row">
+      <button class="btn primary" type="submit">Save changes</button>
+      <button class="btn ghost" type="button" id="edit-cancel">Cancel</button>
     </div>
     <p class="form-msg" id="edit-msg"></p>
   </form>

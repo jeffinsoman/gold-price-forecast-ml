@@ -1,8 +1,7 @@
-// Front-end for the Income vs Expense Tracker. Talks to the Worker API under /api.
+// Front-end for the money tracker. Talks to the Worker API under /api.
 
 const DEFAULT_CURRENCY = "AED";
 
-// A symbol for every account, payment method and category the API offers.
 const ICONS = {
   "Cash in Hand": "💵",
   Cash: "💵",
@@ -35,6 +34,7 @@ const state = {
   options: {},
   currency: localStorage.getItem("currency") || DEFAULT_CURRENCY,
   month: "",
+  data: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -46,27 +46,24 @@ function money(value) {
 }
 
 function monthLabel(key) {
+  const names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const [year, month] = key.split("-");
+  return `${names[Number(month) - 1]} ${year}`;
+}
+
+function shortMonth(key) {
   const names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const [year, month] = key.split("-");
   return `${names[Number(month) - 1]} ${year}`;
 }
 
-function shiftMonth(key, count) {
-  const [year, month] = key.split("-").map(Number);
-  const total = year * 12 + (month - 1) + count;
-  return `${String(Math.floor(total / 12)).padStart(4, "0")}-${String((total % 12) + 1).padStart(2, "0")}`;
-}
-
 function dayLabel(iso) {
   const [year, month, day] = iso.split("-");
-  return `${day} ${monthLabel(`${year}-${month}`)}`;
+  return `${day} ${shortMonth(`${year}-${month}`)}`;
 }
 
 async function api(path, options) {
-  const response = await fetch(`/api${path}`, {
-    headers: { "content-type": "application/json" },
-    ...options,
-  });
+  const response = await fetch(`/api${path}`, { headers: { "content-type": "application/json" }, ...options });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "Request failed.");
   return data;
@@ -101,10 +98,9 @@ function setAmount(element, value) {
     element.textContent = money(to);
     return;
   }
-
   const started = performance.now();
   const step = (now) => {
-    const progress = Math.min(1, (now - started) / 420);
+    const progress = Math.min(1, (now - started) / 450);
     const eased = 1 - (1 - progress) ** 3;
     element.textContent = money(from + (to - from) * eased);
     if (progress < 1) requestAnimationFrame(step);
@@ -120,7 +116,7 @@ function empty(text) {
 }
 
 // -------------------------------------------------------------------
-// SHARED BITS
+// PIECES
 // -------------------------------------------------------------------
 function fillChoices(container, values, name, checked) {
   container.innerHTML = "";
@@ -135,7 +131,6 @@ function fillChoices(container, values, name, checked) {
   });
 }
 
-/** Category picker: a symbol you tap, rather than a dropdown to hunt through. */
 function fillChips(container, values, name, checked) {
   container.innerHTML = "";
   values.forEach((value, index) => {
@@ -144,12 +139,12 @@ function fillChips(container, values, name, checked) {
     const isOn = checked ? value === checked : index === 0;
     label.innerHTML =
       `<input type="radio" name="${name}" value="${value}"${isOn ? " checked" : ""} />` +
-      `<span><span class="chip-icon" aria-hidden="true">${icon(value)}</span>${value}</span>`;
+      `<span><span aria-hidden="true">${icon(value)}</span>${value}</span>`;
     container.append(label);
   });
 }
 
-/** Tap to add a round number to an amount field instead of typing it. */
+/** Tap to add a round number instead of typing it. */
 function fillQuick(container, input) {
   container.innerHTML = "";
   for (const step of QUICK_AMOUNTS) {
@@ -173,56 +168,55 @@ function fillQuick(container, input) {
   container.append(clear);
 }
 
-function linkButton(text, onClick, variant = "") {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = `link ${variant}`.trim();
-  button.textContent = text;
-  button.addEventListener("click", onClick);
-  return button;
+/** One row of the dashboard's income or expense list. */
+function lineRow({ label, total, share, kind }) {
+  const li = document.createElement("li");
+  li.innerHTML =
+    `<span class="line-icon" aria-hidden="true">${icon(label)}</span>` +
+    `<span><span class="line-label">${label}</span></span>` +
+    `<span class="line-value ${kind}">${kind === "in" ? "+" : "−"}${money(total)}</span>` +
+    `<span class="line-track"><span class="${kind}" style="width:${share}%"></span></span>`;
+  return li;
 }
 
-function entryTable(rows, kind) {
-  if (!rows.length) {
-    return empty(kind === "income" ? "No income recorded in this month." : "No expenses recorded in this month.");
-  }
+function entryRow(row, kind) {
+  const income = kind === "income";
+  const where = income ? row.account : row.method;
+  const item = document.createElement("div");
+  item.className = "entry";
+  item.innerHTML =
+    `<span class="line-icon" aria-hidden="true">${icon(row.category)}</span>` +
+    `<div class="entry-main">` +
+    `<p class="entry-title">${row.category}` +
+    `${row.friend ? `<span class="tag friend">🤝 ${row.friend}</span>` : ""}` +
+    `${!income && row.date > state.today ? '<span class="tag due">due</span>' : ""}</p>` +
+    `<p class="entry-sub">${dayLabel(row.date)} · ${icon(where)} ${where}${row.note ? ` · ${row.note}` : ""}</p>` +
+    `</div>`;
 
-  const source = kind === "income" ? "account" : "method";
-  const wrap = document.createElement("div");
-  wrap.className = "table-wrap";
-  const table = document.createElement("table");
-  table.innerHTML =
-    `<thead><tr><th>Date</th><th>${kind === "income" ? "Account" : "Paid by"}</th>` +
-    `<th>Category</th><th>Friend</th><th>Note</th><th class="amount">Amount</th><th></th></tr></thead>`;
+  const right = document.createElement("div");
+  right.className = "entry-right";
+  right.innerHTML = `<span class="entry-amount ${income ? "in" : "out"}">${income ? "+" : "−"}${money(row.amount)}</span>`;
 
-  const body = document.createElement("tbody");
-  for (const row of rows) {
-    const tr = document.createElement("tr");
-    const due = kind === "expense" && row.date > state.today ? ' <span class="tag due">due</span>' : "";
-    tr.innerHTML =
-      `<td>${dayLabel(row.date)}${due}</td>` +
-      `<td><span aria-hidden="true">${icon(row[source])}</span> ${row[source]}</td>` +
-      `<td><span class="tag"><span aria-hidden="true">${icon(row.category)}</span> ${row.category}</span></td>` +
-      `<td>${row.friend ? `<span class="tag friend">🤝 ${row.friend}</span>` : ""}</td>` +
-      `<td>${row.note || ""}</td>` +
-      `<td class="amount">${money(row.amount)}</td>`;
-
-    const cell = document.createElement("td");
-    cell.className = "actions";
-    cell.append(
-      linkButton("Edit", () => openEdit(kind, row)),
-      linkButton("Delete", async () => {
-        await api(`/${kind}/${row.id}`, { method: "DELETE" });
-        toast(`Deleted that ${kind} entry.`);
-        await loadMonth(state.month);
-      }, "danger"),
-    );
-    tr.append(cell);
-    body.append(tr);
-  }
-  table.append(body);
-  wrap.append(table);
-  return wrap;
+  const actions = document.createElement("div");
+  actions.className = "entry-actions";
+  const edit = document.createElement("button");
+  edit.type = "button";
+  edit.className = "link";
+  edit.textContent = "Edit";
+  edit.addEventListener("click", () => openEdit(kind, row));
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "link danger";
+  remove.textContent = "Delete";
+  remove.addEventListener("click", async () => {
+    await api(`/${kind}/${row.id}`, { method: "DELETE" });
+    toast("Entry deleted.");
+    await loadMonth(state.month);
+  });
+  actions.append(edit, remove);
+  right.append(actions);
+  item.append(right);
+  return item;
 }
 
 // -------------------------------------------------------------------
@@ -253,7 +247,6 @@ function openEdit(kind, row) {
     { type: "text", name: "note", label: "Note", value: row.note },
   ];
 
-  const dialog = $("edit-dialog");
   const holder = $("edit-fields");
   $("edit-title").textContent = income ? "Edit income" : "Edit expense";
   $("edit-msg").textContent = "";
@@ -264,12 +257,10 @@ function openEdit(kind, row) {
       const set = document.createElement("fieldset");
       set.className = "field";
       set.innerHTML = `<legend>${field.label}</legend><div class="${field.type === "chips" ? "chips" : "choices"}"></div>`;
-      const target = set.querySelector("div");
-      (field.type === "chips" ? fillChips : fillChoices)(target, field.values, field.name, field.value);
+      (field.type === "chips" ? fillChips : fillChoices)(set.querySelector("div"), field.values, field.name, field.value);
       holder.append(set);
       continue;
     }
-
     const label = document.createElement("label");
     label.className = "field";
     label.textContent = field.label;
@@ -290,7 +281,7 @@ function openEdit(kind, row) {
     toast(`Updated to ${money(saved.entry.amount)}.`);
     await loadMonth(state.month);
   };
-  dialog.showModal();
+  $("edit-dialog").showModal();
 }
 
 function bindEditDialog() {
@@ -317,75 +308,108 @@ function fillMonths(selected) {
   for (const key of state.months) {
     const option = document.createElement("option");
     option.value = key;
-    option.textContent = monthLabel(key);
+    option.textContent = shortMonth(key);
     option.selected = key === selected;
     select.append(option);
+  }
+}
+
+function drawLines(container, rows, kind, emptyText) {
+  container.replaceChildren();
+  if (!rows.length) {
+    container.append(empty(emptyText));
+    return;
+  }
+  const max = Math.max(...rows.map((row) => row.total));
+  for (const row of rows) {
+    container.append(lineRow({ ...row, share: (row.total / max) * 100, kind }));
+  }
+}
+
+function drawFriends(rows) {
+  const list = $("friends-list");
+  list.replaceChildren();
+  if (!rows.length) {
+    list.append(empty("No names on any entry yet. Add one when money moves between you and a friend."));
+    $("friends-net").textContent = "";
+    return;
+  }
+
+  const net = rows.reduce((sum, row) => sum + row.net, 0);
+  $("friends-net").textContent = net === 0 ? "all square" : `${money(Math.abs(net))} ${net > 0 ? "owed to you" : "you owe"}`;
+  $("friends-net").className = `card-total ${net >= 0 ? "in" : "out"}`;
+
+  const max = Math.max(1, ...rows.map((row) => Math.abs(row.net)));
+  for (const row of rows) {
+    const settled = row.net === 0;
+    const theyOwe = row.net > 0;
+    const li = document.createElement("li");
+    li.innerHTML =
+      `<span class="line-icon" aria-hidden="true">🤝</span>` +
+      `<span><span class="line-label">${row.friend}</span>` +
+      `<span class="line-sub">${money(row.out)} out · ${money(row.back)} back</span></span>` +
+      `<span class="line-value ${settled ? "" : theyOwe ? "in" : "out"}">` +
+      `${settled ? "settled" : money(Math.abs(row.net))}</span>` +
+      `<span class="line-track"><span class="${theyOwe ? "in" : "out"}" ` +
+      `style="width:${(Math.abs(row.net) / max) * 100}%"></span></span>`;
+    list.append(li);
   }
 }
 
 async function loadMonth(month) {
   state.month = month;
   const data = await api(`/month/${month}`);
+  state.data = data;
   state.months = data.months;
   fillMonths(month);
 
   const s = data.summary;
-  const card = $("status-card");
-  card.className = `status-card ${s.isOverBudget ? "bad" : "ok"}`;
-  card.querySelector(".status-headline").innerHTML =
-    `<span aria-hidden="true">${s.isOverBudget ? "⚠️" : s.hasEntries ? "✅" : "🗓️"}</span> ` +
-    `${s.label} · Income ${money(s.incomeTotal)} · Expense ${money(s.expenseTotal)} · ${s.status}`;
-  card.querySelector(".status-detail").textContent = s.statusMessage;
+  $("month-title").textContent = monthLabel(month);
+  $("eyebrow").textContent = month === state.currentMonth ? "This month" : "Looking back at";
 
-  setAmount($("tile-carried"), s.carriedForward);
-  $("tile-carried-foot").textContent = `left over from ${monthLabel(shiftMonth(month, -1))}`;
-  setAmount($("tile-income"), s.incomeTotal);
-  setAmount($("tile-expense"), s.expenseTotal);
-  setAmount($("tile-balance"), s.balance);
-  $("tile-balance-foot").textContent =
-    `${money(s.carriedForward)} + ${money(s.incomeTotal)} − ${money(s.expenseTotal)}, opens ${monthLabel(shiftMonth(month, 1))}`;
+  // Hero: the one number the whole app is for.
+  const hero = $("hero");
+  hero.classList.toggle("over", s.isOverBudget);
+  setAmount($("hero-balance"), s.balance);
+  $("hero-sum").textContent = `${money(s.incomeTotal)} in − ${money(s.expenseTotal)} out`;
+  setAmount($("hero-income"), s.incomeTotal);
+  setAmount($("hero-expense"), s.expenseTotal);
+  $("hero-bar-fill").style.width = `${Math.min(100, s.usedPct)}%`;
+  $("hero-note").textContent = s.hasEntries
+    ? s.isOverBudget
+      ? `${s.statusMessage} — spending passed what came in this month.`
+      : `${s.statusMessage}. ${Math.round(s.usedPct)}% of this month's income is spent.`
+    : "Nothing recorded yet. Add some income or an expense to start the month.";
 
-  const meter = $("meter");
-  meter.style.width = `${Math.min(100, s.usedPct)}%`;
-  meter.classList.toggle("over", s.isOverBudget);
-  $("month-note").textContent = s.hasEntries
-    ? `${money(s.available)} available this month, ${Math.round(s.usedPct)}% of it spent.`
-    : `${money(s.carriedForward)} carried in. Add income and expenses to see this month take shape.`;
+  // Wallets: what is actually there, counting every month up to this one.
+  setAmount($("wallet-cash"), data.accounts.balances["Cash in Hand"]);
+  setAmount($("wallet-bank"), data.accounts.balances.Bank);
+  $("wallet-note").textContent = data.accounts.cardSpend
+    ? `Running totals to the end of ${shortMonth(month)} · ${money(data.accounts.cardSpend)} charged to the credit card`
+    : `Running totals to the end of ${shortMonth(month)}`;
+
+  // Dashboard lines.
+  drawLines($("dash-income"), data.incomeLines, "in", "No income this month yet.");
+  drawLines($("dash-expense"), data.expenseLines, "out", "No expenses this month yet.");
+  $("dash-income-total").textContent = `+${money(s.incomeTotal)}`;
+  $("dash-expense-total").textContent = `−${money(s.expenseTotal)}`;
+
+  const balance = $("dash-balance");
+  balance.textContent = money(s.balance);
+  balance.className = `card-total ${s.balance < 0 ? "negative" : ""}`;
+  $("dash-balance-note").textContent = `${money(s.incomeTotal)} income − ${money(s.expenseTotal)} expense. ${shortMonth(month)} stands on its own; next month starts fresh.`;
+
+  // The two lists, on their own tabs.
+  $("income-total").textContent = `+${money(s.incomeTotal)}`;
+  $("expense-total").textContent = `−${money(s.expenseTotal)}`;
+  $("income-list").replaceChildren(
+    ...(data.income.length ? data.income.map((row) => entryRow(row, "income")) : [empty("Nothing yet this month.")]),
+  );
+  $("expense-list").replaceChildren(
+    ...(data.expenses.length ? data.expenses.map((row) => entryRow(row, "expense")) : [empty("Nothing yet this month.")]),
+  );
 
   drawFriends(data.friends ?? []);
-
-  $("income-count").textContent = data.income.length;
-  $("expense-count").textContent = data.expenses.length;
-  $("month-income").replaceChildren(entryTable(data.income, "income"));
-  $("month-expenses").replaceChildren(entryTable(data.expenses, "expense"));
-}
-
-/** Who is holding your money, and who you have squared up with. */
-function drawFriends(rows) {
-  const panel = $("friends-panel");
-  panel.hidden = rows.length === 0;
-  if (!rows.length) return;
-
-  $("friends-count").textContent = rows.filter((row) => row.net !== 0).length;
-
-  const max = Math.max(1, ...rows.map((row) => Math.abs(row.net)));
-  const list = document.createElement("ul");
-  list.className = "bars";
-
-  for (const row of rows) {
-    const settled = row.net === 0;
-    const theyOwe = row.net > 0;
-    const item = document.createElement("li");
-    item.innerHTML =
-      `<span class="bar-name"><span aria-hidden="true">🤝</span> ${row.friend}</span>` +
-      `<span class="bar-value">${settled ? "settled" : money(Math.abs(row.net))}` +
-      `<span class="muted small"> ${settled ? "" : theyOwe ? "they owe" : "you owe"}</span></span>` +
-      `<span class="bar-track"><span class="bar-fill ${theyOwe ? "income" : "expense"}" ` +
-      `style="width:${(Math.abs(row.net) / max) * 100}%"></span></span>` +
-      `<span class="muted small friend-detail">${money(row.out)} out · ${money(row.back)} back</span>`;
-    list.append(item);
-  }
-  $("friends-list").replaceChildren(list);
 }
 
 // -------------------------------------------------------------------
@@ -410,9 +434,9 @@ function bindEntryForm(kind) {
       const result = await api(`/${kind}`, { method: "POST", body: JSON.stringify(body) });
       const where = result.entry[field];
       const who = result.entry.friend ? ` ${kind === "income" ? "from" : "to"} ${result.entry.friend}` : "";
-      const text = `${icon(where)} Saved ${money(result.entry.amount)} ${kind === "income" ? "into" : "by"} ${where}${who} on ${dayLabel(result.entry.date)}.`;
-      message($(`${kind}-msg`), `${text} ${result.summary.label}: ${result.summary.statusMessage}.`, !result.summary.isOverBudget);
-      toast(`${text} ${result.summary.statusMessage}.`, result.summary.isOverBudget ? "bad" : "ok");
+      const text = `${icon(where)} ${money(result.entry.amount)} ${kind === "income" ? "into" : "by"} ${where}${who}`;
+      message($(`${kind}-msg`), `${text}. ${result.summary.statusMessage}.`, !result.summary.isOverBudget);
+      toast(`${text}. ${result.summary.statusMessage}.`, result.summary.isOverBudget ? "bad" : "ok");
       form.reset();
       form.date.value = state.today;
       await loadMonth(state.month);
@@ -441,12 +465,11 @@ function bindReset() {
       }, 5000);
       return;
     }
-
     const result = await api("/reset", { method: "POST", body: JSON.stringify({ confirm: "RESET" }) });
     armed = false;
     button.textContent = "Delete everything";
     button.classList.remove("armed");
-    message($("reset-msg"), `Cleared ${result.cleared} entr${result.cleared === 1 ? "y" : "ies"}. Starting fresh.`);
+    message($("reset-msg"), `Cleared ${result.cleared} entries. Starting fresh.`);
     toast("Everything cleared.");
     await boot();
   });
@@ -456,32 +479,24 @@ function bindReset() {
 // BOOT
 // -------------------------------------------------------------------
 function bindTabs() {
-  $("tabs").addEventListener("click", async (event) => {
+  $("tabs").addEventListener("click", (event) => {
     const tab = event.target.closest(".tab");
     if (!tab) return;
     document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("is-active", t === tab));
     document.querySelectorAll(".page").forEach((page) =>
       page.classList.toggle("hidden", page.id !== `page-${tab.dataset.page}`),
     );
-    if (tab.dataset.page === "month") await loadMonth(state.month || state.currentMonth);
+    window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
   });
-}
-
-function paintBrandMark() {
-  const mark = $("brand-mark");
-  mark.textContent = state.currency;
-  mark.classList.toggle("wide", state.currency.length > 1);
 }
 
 function bindCurrency() {
   const input = $("currency");
   input.value = state.currency;
-  paintBrandMark();
   input.addEventListener("change", async () => {
     state.currency = input.value.trim() || DEFAULT_CURRENCY;
     input.value = state.currency;
     localStorage.setItem("currency", state.currency);
-    paintBrandMark();
     await loadMonth(state.month);
   });
 }
@@ -494,10 +509,8 @@ async function boot() {
   state.currentMonth = bootstrap.currentMonth;
   state.months = bootstrap.months;
   state.options = bootstrap.options;
-  $("friend-names").innerHTML = (bootstrap.friends ?? [])
-    .map((name) => `<option value="${name}"></option>`)
-    .join("");
   state.month = state.months.includes(state.month) ? state.month : bootstrap.currentMonth;
+  $("friend-names").innerHTML = (bootstrap.friends ?? []).map((name) => `<option value="${name}"></option>`).join("");
 
   fillChoices($("income-accounts"), state.options.incomeAccounts, "account");
   fillChoices($("expense-methods"), state.options.expenseMethods, "method");
@@ -521,7 +534,5 @@ async function boot() {
 }
 
 boot().catch((error) => {
-  $("status-card").className = "status-card bad";
-  $("status-card").querySelector(".status-headline").textContent = "Could not reach the API";
-  $("status-card").querySelector(".status-detail").textContent = error.message;
+  $("hero-note").textContent = `Could not reach the API: ${error.message}`;
 });

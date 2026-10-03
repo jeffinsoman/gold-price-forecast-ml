@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  accountBalances,
   addMonths,
   friendTotals,
+  lines,
   isIsoDate,
   monthKey,
   monthLabel,
@@ -33,27 +35,47 @@ test("in control when something is left", () => {
   assert.equal(Math.round(s.usedPct), 56);
 });
 
-test("balance is carried forward + income - expense, and it carries on", () => {
+test("each month stands on its own: nothing carries in", () => {
   const oct = summarize({ month: "2026-10", incomeTotal: 700, expenseTotal: 500 });
-  assert.equal(oct.carriedForward, 0);
   assert.equal(oct.balance, 200);
 
-  // November opens on exactly that balance.
-  const nov = summarize({ month: "2026-11", carriedForward: oct.balance, incomeTotal: 8947, expenseTotal: 7810 });
-  assert.equal(nov.carriedForward, 200);
-  assert.equal(nov.available, 9147);
-  assert.equal(nov.balance, 1337);
+  // November knows nothing about October's 200.
+  const nov = summarize({ month: "2026-11", incomeTotal: 8947, expenseTotal: 7810 });
+  assert.equal(nov.balance, 1137);
   assert.equal(nov.status, "IN CONTROL");
+
+  const empty = summarize({ month: "2026-12" });
+  assert.equal(empty.balance, 0);
+  assert.equal(empty.status, "NO ENTRIES");
 });
 
-test("carried money can be spent, and overspending it still shows", () => {
-  const spendable = summarize({ month: "2026-11", carriedForward: 5000, incomeTotal: 1000, expenseTotal: 5500 });
-  assert.equal(spendable.balance, 500);
-  assert.equal(spendable.status, "IN CONTROL");
+test("the dashboard reads as lines, biggest first", () => {
+  const rows = lines([
+    { category: "Rent", amount: 3000 },
+    { category: "Food", amount: 400 },
+    { category: "Rent", amount: 500 },
+    { category: "Food", amount: 200 },
+  ]);
+  assert.deepEqual(rows, [
+    { label: "Rent", total: 3500 },
+    { label: "Food", total: 600 },
+  ]);
+  assert.deepEqual(lines([]), []);
+});
 
-  const beyond = summarize({ month: "2026-11", carriedForward: 5000, incomeTotal: 1000, expenseTotal: 6500 });
-  assert.equal(beyond.balance, -500);
-  assert.equal(beyond.status, "OUT OF BUDGET");
+test("cash and bank balances count what went in and out of each", () => {
+  const held = accountBalances(
+    [{ account: "Bank", total: 9000 }, { account: "Cash in Hand", total: 500 }],
+    [{ method: "Cash", total: 200 }, { method: "Bank", total: 1500 }, { method: "Credit Card", total: 1000 }],
+  );
+  assert.equal(held.balances["Cash in Hand"], 300);
+  assert.equal(held.balances.Bank, 7500);
+  assert.equal(held.cardSpend, 1000);
+  assert.equal(held.total, 7800);
+
+  // Spending cash you never recorded receiving shows up as a negative, not a zero.
+  const short = accountBalances([], [{ method: "Cash", total: 120 }]);
+  assert.equal(short.balances["Cash in Hand"], -120);
 });
 
 test("an empty month reports no entries", () => {

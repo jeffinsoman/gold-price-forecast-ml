@@ -6,8 +6,10 @@ import {
   EXPENSE_METHODS,
   INCOME_ACCOUNTS,
   INCOME_CATEGORIES,
+  accountBalances,
   addMonths,
   friendTotals,
+  lines,
   monthKey,
   summarize,
   today,
@@ -59,16 +61,13 @@ function ensureSchema(db) {
 // -------------------------------------------------------------------
 // QUERIES
 // -------------------------------------------------------------------
-/** What every earlier month left behind: income minus expense, all time before `month`. */
-async function carriedForward(db, month) {
-  const row = await db
-    .prepare(
-      "SELECT COALESCE((SELECT SUM(amount) FROM income WHERE month < ?1), 0)" +
-        " - COALESCE((SELECT SUM(amount) FROM expense WHERE month < ?1), 0) AS carried",
-    )
-    .bind(month)
-    .first();
-  return Number(row?.carried) || 0;
+/** What sits in each account at the end of `month`, counting from the beginning. */
+async function held(db, month) {
+  const [income, expense] = await db.batch([
+    db.prepare("SELECT account, SUM(amount) AS total FROM income WHERE month <= ?1 GROUP BY account").bind(month),
+    db.prepare("SELECT method, SUM(amount) AS total FROM expense WHERE month <= ?1 GROUP BY method").bind(month),
+  ]);
+  return accountBalances(income.results, expense.results);
 }
 
 /** Everything tagged with a name, netted per friend, across every month. */
@@ -81,10 +80,10 @@ async function friends(db) {
 }
 
 async function monthData(db, month) {
-  const [income, expense, carried, withFriends] = await Promise.all([
+  const [income, expense, accounts, withFriends] = await Promise.all([
     db.prepare("SELECT * FROM income WHERE month = ?1 ORDER BY date DESC, id DESC").bind(month).all(),
     db.prepare("SELECT * FROM expense WHERE month = ?1 ORDER BY date DESC, id DESC").bind(month).all(),
-    carriedForward(db, month),
+    held(db, month),
     friends(db),
   ]);
 
@@ -95,10 +94,12 @@ async function monthData(db, month) {
       month,
       incomeTotal: total(income.results),
       expenseTotal: total(expense.results),
-      carriedForward: carried,
     }),
     income: income.results,
     expenses: expense.results,
+    incomeLines: lines(income.results),
+    expenseLines: lines(expense.results),
+    accounts,
     friends: withFriends,
   };
 }

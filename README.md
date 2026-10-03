@@ -65,75 +65,64 @@ This terminal operates on four distinct analytical layers:
 
 ---
 
-## Income vs Expense Tracker (Cloudflare Workers + D1)
+## Money — an income vs expense tracker (Cloudflare Workers + D1)
 
-A small personal tracker that answers one question: **how much is left this month?**
+Four tabs, one question: **how much is left this month?**
 A Worker serves the API, D1 stores the entries, and the page is plain static HTML/CSS/JS — no build
 step and no framework.
 
-### Run and deploy
-
 ```bash
 npm install
-npm run dev                    # http://localhost:8787, against a local D1 emulator
-npm test                       # the month rules
-npm run deploy                 # publishes to the Worker
+npm run dev      # http://localhost:8787, against a local D1 emulator
+npm test         # the month rules
+npm run deploy   # publishes to the Worker
 ```
 
 Pushing to `main` deploys automatically through Workers Builds.
 
-### The month
+### 🏠 Dashboard
+* **Cash in hand** and **Bank**, counted from every entry up to the end of the month shown. Credit
+  card spending is reported separately, because a card is a bill rather than an account.
+* **Income** and **Expense**, each as a short list of lines — one per category, biggest first, with a
+  bar for its share.
+* **Balance** — `income − expense`, and nothing else. Each month stands on its own; next month starts
+  fresh.
 
-```
-carried forward + income - expense = balance left   →   opens the next month
-```
+### 💰 Income · 🧾 Expense
+Date, amount, where it came in or went out (Cash in Hand / Bank, or Cash / Bank / Credit Card), a
+category, an optional friend and a note. Below the form, that month's entries, each editable and
+deletable.
 
-That is the whole model. The card at the top reads **IN CONTROL** while something is left, and
-**OUT OF BUDGET** once spending passes what there was to spend:
+### 🤝 Friends
+Put a name on an expense when money goes out to someone, and on the income when it comes back. The
+tab nets the two per person across every month — *AED 500 owed to you*, or *settled*.
 
-> **Oct 2026 · Income 9,000 · Expense 10,000 · OUT OF BUDGET** — out of budget by 1,000
->
-> With an expense of 5,000 instead: **IN CONTROL** — 4,000 left.
-
-Below the card: carried forward, income, expense and the balance, then this month's income and
-expenses as two lists, each row editable and deletable.
-
-### Adding entries
-**Income** — date, amount, received into **Cash in Hand** or **Bank**, a category, an optional
-friend and a note.
-
-**Expense** — date (today, or later for something due), amount, paid by **Cash**, **Bank** or
-**Credit Card**, a category, an optional friend and a note.
-
-Categories are icon chips rather than dropdowns, amounts have `+50 / +100 / +500 / +1,000` buttons,
-and the currency label (AED by default) is set once in the header.
-
-### Friends
-Any entry can carry a name. Tag an expense when money goes to someone and the income when it comes
-back, and the **With friends** panel nets the two per person — *AED 200 they owe*, or *settled* once
-it balances. Names already used are offered as suggestions on the forms. Nothing else changes: these
-are ordinary entries, counted in the month like everything else.
+### Design notes
+The palette is a two-pole pair — teal-green for money in, coral for money out, indigo for controls —
+with separate steps for dark mode rather than an automatic flip. Both sets were checked with the
+dataviz validator (lightness band, chroma floor, colour-blind separation, contrast against the
+surface): light `#0ea47f / #e2563f / #5b5bd6` at ΔE 9.2 deutan, dark `#10a683 / #e8674f / #7375d8` at
+ΔE 9.6. Money in and out are never told apart by colour alone — every figure carries a sign, a label
+and an icon. Amounts are tabular-figure, the tab bar sits under the thumb on a phone and at the top
+on a wide screen, and motion respects `prefers-reduced-motion`.
 
 ### Start over
-The **Start over** section at the bottom of the Month page deletes every entry in every month. It
-takes two taps and cannot be undone.
+At the foot of the Dashboard: deletes every entry in every month, two taps, no undo.
 
 ### Layout
 | Path | What it is |
 | --- | --- |
 | `worker/index.js` | Worker: API routes and D1 queries |
-| `worker/summary.js` | Month rules and input validation (no Worker globals, unit tested) |
+| `worker/summary.js` | Month rules, lines, balances and validation (unit tested) |
 | `public/` | The page, its script and its styles |
 | `migrations/` | D1 schema |
 | `test/` | Tests for the month rules |
-| `wrangler.jsonc` | Worker name, assets binding and the D1 binding (`DB`) |
 
 ### API
-
 | Method | Route | Purpose |
 | --- | --- | --- |
-| GET | `/api/bootstrap` | Form choices, today's date, months that hold entries |
-| GET | `/api/month/:month` | Summary and both lists for `2026-10` |
+| GET | `/api/bootstrap` | Form choices, today's date, months, known friends |
+| GET | `/api/month/:month` | Summary, lines, account balances, entries and friends |
 | POST | `/api/income` · `/api/expense` | `{ date, amount, account \| method, category, friend, note }` |
 | PATCH · DELETE | `/api/income/:id` · `/api/expense/:id` | Edit or remove an entry |
 | POST | `/api/reset` | `{ "confirm": "RESET" }` — empties the tracker |

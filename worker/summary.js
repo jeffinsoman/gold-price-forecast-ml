@@ -118,19 +118,17 @@ export function friendTotals(outRows = [], backRows = []) {
 }
 
 /**
- * One month, and the only question it has to answer: how much is left?
+ * One month on its own terms:
  *
- *   carried forward + income - expense = balance   ->   opens the next month
+ *   income - expense = balance
  *
- * Spending more than there was to spend reads as OUT OF BUDGET.
+ * Each month starts fresh; nothing is carried in from the one before.
+ * Spending more than came in reads as OUT OF BUDGET.
  */
-export function summarize({ month, incomeTotal = 0, expenseTotal = 0, carriedForward = 0 }) {
+export function summarize({ month, incomeTotal = 0, expenseTotal = 0 }) {
   const income = Math.round((Number(incomeTotal) || 0) * 100) / 100;
   const expense = Math.round((Number(expenseTotal) || 0) * 100) / 100;
-  const opening = Math.round((Number(carriedForward) || 0) * 100) / 100;
-
-  const available = opening + income;
-  const balance = available - expense;
+  const balance = income - expense;
   const hasEntries = income > 0 || expense > 0;
   const isOverBudget = hasEntries && balance < 0;
 
@@ -145,16 +143,14 @@ export function summarize({ month, incomeTotal = 0, expenseTotal = 0, carriedFor
   }
 
   let usedPct = 0;
-  if (available > 0) usedPct = (expense / available) * 100;
+  if (income > 0) usedPct = (expense / income) * 100;
   else if (expense > 0) usedPct = 100;
 
   return {
     month,
     label: monthLabel(month),
-    carriedForward: opening,
     incomeTotal: income,
     expenseTotal: expense,
-    available,
     balance,
     hasEntries,
     isOverBudget,
@@ -162,6 +158,40 @@ export function summarize({ month, incomeTotal = 0, expenseTotal = 0, carriedFor
     statusMessage,
     usedPct,
   };
+}
+
+/** The month's entries as lines to read down: one per category, biggest first. */
+export function lines(rows) {
+  const totals = new Map();
+  for (const row of rows) {
+    const label = String(row.category ?? "Other");
+    totals.set(label, (totals.get(label) ?? 0) + (Number(row.amount) || 0));
+  }
+  return [...totals.entries()]
+    .map(([label, total]) => ({ label, total: Math.round(total * 100) / 100 }))
+    .sort((a, b) => b.total - a.total || a.label.localeCompare(b.label));
+}
+
+/**
+ * What is actually in each account, counting everything up to the end of
+ * `month`: money received into it, less money paid from it. The credit card is
+ * a bill rather than an account, so it is reported on its own.
+ */
+export function accountBalances(incomeRows = [], expenseRows = []) {
+  const balances = Object.fromEntries(INCOME_ACCOUNTS.map((account) => [account, 0]));
+  for (const row of incomeRows) {
+    if (row.account in balances) balances[row.account] += Number(row.total ?? row.amount) || 0;
+  }
+
+  let cardSpend = 0;
+  for (const row of expenseRows) {
+    const amount = Number(row.total ?? row.amount) || 0;
+    if (row.method === "Cash") balances["Cash in Hand"] -= amount;
+    else if (row.method === "Bank") balances.Bank -= amount;
+    else cardSpend += amount;
+  }
+
+  return { balances, cardSpend, total: Object.values(balances).reduce((sum, value) => sum + value, 0) };
 }
 
 function format(value) {
