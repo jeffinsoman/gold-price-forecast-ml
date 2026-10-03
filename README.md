@@ -101,15 +101,19 @@ Mashreq EMI, ADCB EMI, DIB EMI, Home pay, Friend, Food, ADCB Outstanding, CBD Ou
 Outstanding, Entertainment, Other, and Active EMI for ADCB, CBD, Mashreq and DIB. An entry filed
 under an older category keeps it when you edit it.
 
-An expense is either **paid** or **still to pay**:
+Both sides say whether the money has actually moved:
 
-* **Paid** — the money has gone, so it comes off cash or bank straight away (or onto the card bill).
-* **Still to pay** — a payment you are expecting to make. It is recorded, listed under **Still to
-  pay** on the dashboard, and counted in the month's expense, but it moves no balance at all until
-  you press **Mark paid** on it.
+| | Settled | On its way |
+| --- | --- | --- |
+| **Income** | ✅ Received | ⏳ Still to come |
+| **Expense** | ✅ Paid | ⏳ Still to pay |
 
-So the wallets always show money that has actually moved, while the month still shows what you are
-committed to.
+Settled money lands in cash or bank straight away (or on the card bill). Money on its way is
+recorded and counted in the month, listed under **Still to come** or **Still to pay** on the
+dashboard, but it moves no balance until you press **Mark received** or **Mark paid** on the row.
+
+So the wallets always show money that has really moved, while the month shows what you are owed and
+what you owe.
 
 ### 🤝 Friends
 Put a name on an expense when money goes out to someone, and on the income when it comes back. The

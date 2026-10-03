@@ -14,7 +14,7 @@ import {
   monthKey,
   summarize,
   today,
-  isPaid,
+  isSettled,
   validateCardPayment,
   validateEntry,
   validateOpening,
@@ -58,10 +58,15 @@ function ensureSchema(db) {
         // Already there.
       }
     }
-    try {
-      await db.prepare("ALTER TABLE expense ADD COLUMN paid INTEGER NOT NULL DEFAULT 1").run();
-    } catch {
-      // Already there.
+    for (const [table, column] of [
+      ["expense", "paid"],
+      ["income", "received"],
+    ]) {
+      try {
+        await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} INTEGER NOT NULL DEFAULT 1`).run();
+      } catch {
+        // Already there.
+      }
     }
     await db.batch([
       db.prepare("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)"),
@@ -92,7 +97,9 @@ async function openingBalances(db) {
 /** What sits in each account at the end of `month`, counting from the beginning. */
 async function held(db, month) {
   const [income, expense, card] = await db.batch([
-    db.prepare("SELECT account, SUM(amount) AS total FROM income WHERE month <= ?1 GROUP BY account").bind(month),
+    db
+      .prepare("SELECT account, SUM(amount) AS total FROM income WHERE month <= ?1 AND received = 1 GROUP BY account")
+      .bind(month),
     db
       .prepare("SELECT method, SUM(amount) AS total FROM expense WHERE month <= ?1 AND paid = 1 GROUP BY method")
       .bind(month),
@@ -143,11 +150,13 @@ async function monthData(db, month) {
 
   const total = (rows) => rows.reduce((sum, row) => sum + Number(row.amount), 0);
   const unpaid = expense.results.filter((row) => !row.paid);
+  const awaited = income.results.filter((row) => !row.received);
 
   return {
     summary: summarize({
       month,
       incomeTotal: total(income.results),
+      incomePending: total(awaited),
       expenseTotal: total(expense.results),
       expensePending: total(unpaid),
     }),
@@ -156,6 +165,7 @@ async function monthData(db, month) {
     incomeLines: lines(income.results),
     expenseLines: lines(expense.results),
     toPay: unpaid,
+    toCome: awaited,
     accounts: { ...accounts, card: { ...accounts.card, pendingAllTime: pending } },
     cardPayments: payments.results,
     friends: withFriends,
@@ -219,14 +229,14 @@ async function handleApi(request, env, url) {
       const result = await db
         .prepare(
           table === "income"
-            ? "INSERT INTO income (date, month, amount, account, category, friend, note)" +
-                " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)"
+            ? "INSERT INTO income (date, month, amount, account, category, friend, note, received)" +
+                " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
             : "INSERT INTO expense (date, month, amount, method, category, friend, note, paid)" +
                 " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )
         .bind(
           ...[row.date, row.month, row.amount, row[field], row.category, row.friend, row.note],
-          ...(table === "income" ? [] : [row.paid]),
+          table === "income" ? row.received : row.paid,
         )
         .run();
       return json({ id: result.meta.last_row_id, entry: row, ...(await monthData(db, row.month)) }, 201);
@@ -236,13 +246,13 @@ async function handleApi(request, env, url) {
       .prepare(
         table === "income"
           ? "UPDATE income SET date = ?1, month = ?2, amount = ?3, account = ?4, category = ?5," +
-              " friend = ?6, note = ?7 WHERE id = ?8"
+              " friend = ?6, note = ?7, received = ?9 WHERE id = ?8"
           : "UPDATE expense SET date = ?1, month = ?2, amount = ?3, method = ?4, category = ?5," +
               " friend = ?6, note = ?7, paid = ?9 WHERE id = ?8",
       )
       .bind(
         ...[row.date, row.month, row.amount, row[field], row.category, row.friend, row.note, Number(entry[2])],
-        ...(table === "income" ? [] : [row.paid]),
+        table === "income" ? row.received : row.paid,
       )
       .run();
     if (!result.meta.changes) return fail("That entry no longer exists.", 404);
@@ -297,18 +307,22 @@ async function handleApi(request, env, url) {
   }
 
   // PATCH /api/expense/12/paid - settle an expected payment, or put it back.
-  const settle = path.match(/^expense\/(\d+)\/paid$/);
+  // PATCH /api/income/12/received - mark money as arrived, or back to expected.
+  const settle = path.match(/^(income|expense)\/(\d+)\/(received|paid)$/);
   if (method === "PATCH" && settle) {
+    const [, table, id, column] = settle;
+    if ((table === "income") !== (column === "received")) return fail("Unknown endpoint.", 404);
+
     const body = await readJson(request);
-    const paid = isPaid(body?.paid);
+    const value = isSettled(body?.[column]);
     const result = await db
-      .prepare("UPDATE expense SET paid = ?1 WHERE id = ?2")
-      .bind(paid, Number(settle[1]))
+      .prepare(`UPDATE ${table} SET ${column} = ?1 WHERE id = ?2`)
+      .bind(value, Number(id))
       .run();
     if (!result.meta.changes) return fail("That entry no longer exists.", 404);
 
-    const row = await db.prepare("SELECT month FROM expense WHERE id = ?1").bind(Number(settle[1])).first();
-    return json({ id: Number(settle[1]), paid: Boolean(paid), ...(await monthData(db, row.month)) });
+    const row = await db.prepare(`SELECT month FROM ${table} WHERE id = ?1`).bind(Number(id)).first();
+    return json({ id: Number(id), [column]: Boolean(value), ...(await monthData(db, row.month)) });
   }
 
   // POST /api/reset - empties the tracker. Needs the word RESET to go through.

@@ -205,7 +205,8 @@ function entryRow(row, kind) {
     `<div class="entry-main">` +
     `<p class="entry-title">${row.category}` +
     `${row.friend ? `<span class="tag friend">🤝 ${row.friend}</span>` : ""}` +
-    `${!income && !row.paid ? '<span class="tag due">⏳ to pay</span>' : ""}</p>` +
+    `${!income && !row.paid ? '<span class="tag due">⏳ to pay</span>' : ""}` +
+    `${income && !row.received ? '<span class="tag coming">⏳ to come</span>' : ""}</p>` +
     `<p class="entry-sub">${dayLabel(row.date)} · ${icon(where)} ${where}${row.note ? ` · ${row.note}` : ""}</p>` +
     `</div>`;
 
@@ -216,15 +217,21 @@ function entryRow(row, kind) {
   const actions = document.createElement("div");
   actions.className = "entry-actions";
 
-  // An expected payment can be settled from the row it sits on.
-  if (!income && !row.paid) {
+  // Money still on its way can be settled from the row it sits on.
+  const waiting = income ? !row.received : !row.paid;
+  if (waiting) {
+    const column = income ? "received" : "paid";
     const settle = document.createElement("button");
     settle.type = "button";
     settle.className = "link";
-    settle.textContent = "Mark paid";
+    settle.textContent = income ? "Mark received" : "Mark paid";
     settle.addEventListener("click", async () => {
-      await api(`/expense/${row.id}/paid`, { method: "PATCH", body: JSON.stringify({ paid: true }) });
-      toast(`Paid ${money(row.amount)} by ${row.method}.`);
+      await api(`/${kind}/${row.id}/${column}`, { method: "PATCH", body: JSON.stringify({ [column]: true }) });
+      toast(
+        income
+          ? `Received ${money(row.amount)} into ${row.account}.`
+          : `Paid ${money(row.amount)} by ${row.method}.`,
+      );
       await loadMonth(state.month);
     });
     actions.append(settle);
@@ -283,15 +290,23 @@ function openEdit(kind, row) {
     { type: "text", name: "note", label: "Note", value: row.note },
   ];
 
-  if (!income) {
-    fields.splice(3, 0, {
-      type: "radio",
-      name: "paid",
-      label: "Has it been paid?",
-      values: ["Paid", "Still to pay"],
-      value: row.paid ? "Paid" : "Still to pay",
-    });
-  }
+  fields.splice(3, 0,
+    income
+      ? {
+          type: "radio",
+          name: "received",
+          label: "Has it arrived?",
+          values: ["Received", "Still to come"],
+          value: row.received ? "Received" : "Still to come",
+        }
+      : {
+          type: "radio",
+          name: "paid",
+          label: "Has it been paid?",
+          values: ["Paid", "Still to pay"],
+          value: row.paid ? "Paid" : "Still to pay",
+        },
+  );
 
   const holder = $("edit-fields");
   $("edit-title").textContent = income ? "Edit income" : "Edit expense";
@@ -323,7 +338,8 @@ function openEdit(kind, row) {
   }
 
   editSubmit = async (body) => {
-    if (!income) body.paid = body.paid === "Paid" ? 1 : 0;
+    if (income) body.received = body.received === "Received" ? 1 : 0;
+    else body.paid = body.paid === "Paid" ? 1 : 0;
     const saved = await api(`/${kind}/${row.id}`, { method: "PATCH", body: JSON.stringify(body) });
     toast(`Updated to ${money(saved.entry.amount)}.`);
     await loadMonth(state.month);
@@ -422,7 +438,11 @@ async function loadMonth(month) {
   setAmount($("hero-income"), s.incomeTotal);
   setAmount($("hero-expense"), s.expenseTotal);
   $("hero-bar-fill").style.width = `${Math.min(100, s.usedPct)}%`;
-  const stillToPay = s.expensePending ? ` ${money(s.expensePending)} of it is still to pay.` : "";
+  const waiting = [
+    s.incomePending ? `${money(s.incomePending)} still to come in` : "",
+    s.expensePending ? `${money(s.expensePending)} still to pay out` : "",
+  ].filter(Boolean);
+  const stillToPay = waiting.length ? ` Waiting on ${waiting.join(" and ")}.` : "";
   $("hero-note").textContent = s.hasEntries
     ? (s.isOverBudget
         ? `${s.statusMessage} — spending passed what came in this month.`
@@ -467,6 +487,17 @@ async function loadMonth(month) {
   drawLines($("dash-income"), data.incomeLines, "in", "No income this month yet.");
   drawLines($("dash-expense"), data.expenseLines, "out", "No expenses this month yet.");
   $("dash-income-total").textContent = `+${money(s.incomeTotal)}`;
+  $("dash-income-sub").textContent = s.incomePending
+    ? `${money(s.incomeReceived)} received · ${money(s.incomePending)} still to come`
+    : s.incomeTotal
+      ? "all received"
+      : "";
+
+  // Income on its way: counted in the month, not in any account yet.
+  const toCome = data.toCome ?? [];
+  $("to-come-card").hidden = toCome.length === 0;
+  $("to-come-total").textContent = `+${money(s.incomePending)}`;
+  $("to-come").replaceChildren(...toCome.map((row) => entryRow(row, "income")));
   $("dash-expense-total").textContent = `−${money(s.expenseTotal)}`;
   $("dash-expense-sub").textContent = s.expensePending
     ? `${money(s.expensePaid)} paid · ${money(s.expensePending)} still to pay`
@@ -540,16 +571,20 @@ function bindEntryForm(kind) {
       category: form.querySelector('input[name="category"]:checked')?.value,
       friend: form.friend.value,
       note: form.note.value,
-      ...(kind === "expense" ? { paid: form.querySelector('input[name="paid"]:checked')?.value } : {}),
+      ...(kind === "expense"
+        ? { paid: form.querySelector('input[name="paid"]:checked')?.value }
+        : { received: form.querySelector('input[name="received"]:checked')?.value }),
     };
     try {
       const result = await api(`/${kind}`, { method: "POST", body: JSON.stringify(body) });
       const where = result.entry[field];
       const who = result.entry.friend ? ` ${kind === "income" ? "from" : "to"} ${result.entry.friend}` : "";
-      const pending = kind === "expense" && !result.entry.paid;
-      const text = pending
-        ? `⏳ ${money(result.entry.amount)} to pay by ${where}${who}`
-        : `${icon(where)} ${money(result.entry.amount)} ${kind === "income" ? "into" : "by"} ${where}${who}`;
+      const settled = kind === "expense" ? result.entry.paid : result.entry.received;
+      const text = settled
+        ? `${icon(where)} ${money(result.entry.amount)} ${kind === "income" ? "into" : "by"} ${where}${who}`
+        : kind === "expense"
+          ? `⏳ ${money(result.entry.amount)} to pay by ${where}${who}`
+          : `⏳ ${money(result.entry.amount)} to come into ${where}${who}`;
       message($(`${kind}-msg`), `${text}. ${result.summary.statusMessage}.`, !result.summary.isOverBudget);
       toast(`${text}. ${result.summary.statusMessage}.`, result.summary.isOverBudget ? "bad" : "ok");
       form.reset();

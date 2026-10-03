@@ -195,6 +195,7 @@ main { max-width: 760px; margin: 0 auto; padding: 0 18px; }
 }
 .tag.friend { background: rgba(91, 91, 214, 0.14); color: var(--accent); }
 .tag.due { background: var(--out-wash); color: var(--out); }
+.tag.coming { background: var(--in-wash); color: var(--in); }
 
 /* ---------------------------------------------------------------- forms */
 .form { display: flex; flex-direction: column; gap: 15px; }

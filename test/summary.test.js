@@ -6,7 +6,7 @@ import {
   accountBalances,
   addMonths,
   friendTotals,
-  isPaid,
+  isSettled,
   lines,
   isIsoDate,
   monthKey,
@@ -157,6 +157,7 @@ test("entries are validated and normalised", () => {
     category: "Salary",
     friend: "",
     note: "pay",
+    received: 1,
   });
 
   const expense = validateEntry({ date: "2026-10-28", amount: 3000, method: "Credit Card", category: "made up" }, "expense");
@@ -202,6 +203,42 @@ test("money is netted per friend", () => {
   assert.equal(owed[0].net, -400);
 });
 
+test("income arrives unless it says otherwise", () => {
+  assert.equal(validateEntry({ date: "2026-10-01", amount: 9000, account: "Bank" }, "income").received, 1);
+  assert.equal(validateEntry({ date: "2026-10-01", amount: 9000, account: "Bank", received: true }, "income").received, 1);
+  assert.equal(validateEntry({ date: "2026-10-28", amount: 9000, account: "Bank", received: false }, "income").received, 0);
+  assert.equal(validateEntry({ date: "2026-10-28", amount: 9000, account: "Bank", received: "0" }, "income").received, 0);
+
+  // The two sides carry their own flag and never each other's.
+  assert.equal("paid" in validateEntry({ date: "2026-10-01", amount: 1, account: "Bank" }, "income"), false);
+  assert.equal("received" in validateEntry({ date: "2026-10-01", amount: 1, method: "Bank" }, "expense"), false);
+});
+
+test("the month separates income received from income still to come", () => {
+  const s = summarize({ month: "2026-10", incomeTotal: 13500, incomePending: 4500, expenseTotal: 2000 });
+  assert.equal(s.incomeReceived, 9000);
+  assert.equal(s.incomePending, 4500);
+
+  // The month counts what is expected; the balance is still income - expense.
+  assert.equal(s.balance, 11500);
+
+  const allIn = summarize({ month: "2026-10", incomeTotal: 9000, expenseTotal: 2000 });
+  assert.equal(allIn.incomePending, 0);
+  assert.equal(allIn.incomeReceived, 9000);
+});
+
+test("income still to come is not in any account yet", () => {
+  // Balances are built from settled rows only, so expected money simply is not there.
+  const waiting = accountBalances({ incomeRows: [{ account: "Bank", total: 9000 }], opening: { Bank: 1000 } });
+  assert.equal(waiting.balances.Bank, 10000);
+
+  const arrived = accountBalances({
+    incomeRows: [{ account: "Bank", total: 9000 }, { account: "Bank", total: 4500 }],
+    opening: { Bank: 1000 },
+  });
+  assert.equal(arrived.balances.Bank, 14500);
+});
+
 test("an expense is paid unless it says otherwise", () => {
   assert.equal(validateEntry({ date: "2026-10-03", amount: 100, method: "Bank" }, "expense").paid, 1);
   assert.equal(validateEntry({ date: "2026-10-03", amount: 100, method: "Bank", paid: true }, "expense").paid, 1);
@@ -209,14 +246,13 @@ test("an expense is paid unless it says otherwise", () => {
   assert.equal(validateEntry({ date: "2026-10-03", amount: 100, method: "Bank", paid: "0" }, "expense").paid, 0);
   assert.equal(validateEntry({ date: "2026-10-03", amount: 100, method: "Bank", paid: "1" }, "expense").paid, 1);
 
-  // Income is never pending: it is money that has arrived.
-  assert.equal("paid" in validateEntry({ date: "2026-10-03", amount: 100, account: "Bank" }, "income"), false);
 
-  assert.equal(isPaid(undefined), 1);
-  assert.equal(isPaid(""), 1);
-  assert.equal(isPaid("pending"), 0);
-  assert.equal(isPaid("no"), 0);
-  assert.equal(isPaid(0), 0);
+  assert.equal(isSettled(undefined), 1);
+  assert.equal(isSettled(""), 1);
+  assert.equal(isSettled("pending"), 0);
+  assert.equal(isSettled("expected"), 0);
+  assert.equal(isSettled("no"), 0);
+  assert.equal(isSettled(0), 0);
 });
 
 test("the month separates what is paid from what is still to pay", () => {

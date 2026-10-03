@@ -91,7 +91,17 @@
         <h2><span class="dot in"></span> Income</h2>
         <span class="card-total in" id="dash-income-total">—</span>
       </header>
+      <p class="line-sub" id="dash-income-sub"></p>
       <ul class="lines" id="dash-income"></ul>
+    </section>
+
+    <section class="card" id="to-come-card" hidden>
+      <header class="card-head">
+        <h2><span aria-hidden="true">⏳</span> Still to come</h2>
+        <span class="card-total in" id="to-come-total">—</span>
+      </header>
+      <p class="muted tiny">Income you are expecting. It counts towards the month, but is not in cash or bank until you mark it received.</p>
+      <div id="to-come"></div>
     </section>
 
     <section class="card">
@@ -150,6 +160,13 @@
         <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="9000" required />
           <span class="quick" data-quick="income"></span></label>
       </div>
+      <fieldset class="field">
+        <legend>Has it arrived?</legend>
+        <div class="choices" id="income-received">
+          <label class="choice"><input type="radio" name="received" value="1" checked /><span><span aria-hidden="true">✅</span> Received</span></label>
+          <label class="choice"><input type="radio" name="received" value="0" /><span><span aria-hidden="true">⏳</span> Still to come</span></label>
+        </div>
+      </fieldset>
       <fieldset class="field"><legend>Received in</legend><div class="choices" id="income-accounts"></div></fieldset>
       <fieldset class="field"><legend>Category</legend><div class="chips" id="income-categories"></div></fieldset>
       <div class="grid">
