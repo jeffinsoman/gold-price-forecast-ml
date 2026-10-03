@@ -48,3 +48,27 @@ test("state compares the balance with the plan", () => {
   assert.equal(s.daysAhead, -2);
   assert.equal(s.stats.winRate, 0.5);
 });
+
+test("profit over a target cuts the next days' targets and lots", () => {
+  // Day 1 makes AED 30 against a 12.82 target: balance 230.
+  const s = challengeState({ trades: [{ day: 1, pnl: 30 }], startDate: "2026-10-01", today: "2026-10-01" });
+  assert.equal(s.days[0].status, "hit");
+  // Day 2's plan ends at 226.47, already passed, so it needs nothing.
+  assert.equal(s.days[1].targetProfit, 0);
+  assert.equal(s.days[1].status, "covered");
+  // Day 3 ends at 240.99: 10.99 to make instead of the PDF's 14.52.
+  assert.equal(s.days[2].targetProfit, 10.99);
+  assert.equal(s.days[2].targetLot, 0.0299);
+  assert.equal(s.days[2].profit, 14.52);
+  assert.deepEqual(s.next, { day: 3, targetProfit: 10.99, targetLot: 0.0299, profit: 14.52, lot: 0.0396 });
+  // Further out the plan is back to the PDF numbers.
+  assert.equal(s.days[3].targetProfit, s.days[3].profit);
+});
+
+test("today's target uses the balance the day opened with", () => {
+  const s = challengeState({ trades: [{ day: 1, pnl: 20 }], startDate: "2026-10-01", today: "2026-10-02" });
+  // Opened day 2 with 220 against a 226.47 target.
+  assert.equal(s.today.targetProfit, 6.47);
+  assert.equal(s.today.carry, 7.18);
+  assert.equal(s.today.needed, 6.47);
+});

@@ -118,17 +118,32 @@ export function challengeState({ trades, startBalance = GOLD_START, startDate, t
   const lastTradedDay = Math.max(0, ...byDay.keys());
   const currentDay = Math.max(challengeDay(startDate, today), Math.min(GOLD_DAYS, lastTradedDay || 1));
 
+  const totalPnl = trades.reduce((sum, trade) => sum + (Number(trade.pnl) || 0), 0);
+  const current = round(startBalance + totalPnl);
+
+  // Each day's goal is the PDF's end-of-day balance. Profit above a target
+  // carries forward: the next day only has to make up the gap from what is
+  // actually held, so its target and lot shrink (to nothing when covered).
+  // Days still to come assume each target is hit exactly from here on.
   let balance = startBalance;
   const days = plan.map((row) => {
     const traded = byDay.get(row.day);
-    const open = balance;
+    const open = row.day <= currentDay ? balance : Math.max(current, row.start);
     if (traded) balance += traded.pnl;
-    const status = !traded
-      ? row.day < currentDay ? "skipped" : "upcoming"
-      : balance >= row.target ? "hit" : traded.pnl >= 0 ? "short" : "loss";
+    // Not ahead of the PDF: its own figure, so rounding never drifts by a fils.
+    const targetProfit = open > row.start ? round(Math.max(0, row.target - open)) : open < row.start ? round(row.target - open) : row.profit;
+    const covered = targetProfit === 0;
+    let status;
+    if (traded) status = balance >= row.target ? "hit" : traded.pnl >= 0 ? "short" : "loss";
+    else if (covered) status = "covered";
+    else status = row.day < currentDay ? "skipped" : "upcoming";
     return {
       ...row,
       actualStart: round(open),
+      // Positive when ahead of the PDF at the start of the day.
+      carry: round(open - row.start),
+      targetProfit,
+      targetLot: targetProfit === row.profit ? row.lot : lotFor(targetProfit),
       pnl: traded ? round(traded.pnl) : null,
       trades: traded?.count ?? 0,
       balance: round(balance),
@@ -137,16 +152,16 @@ export function challengeState({ trades, startBalance = GOLD_START, startDate, t
   });
 
   const today_ = days[currentDay - 1];
-  const totalPnl = trades.reduce((sum, trade) => sum + (Number(trade.pnl) || 0), 0);
-  const current = round(startBalance + totalPnl);
   const todayPnl = round(byDay.get(currentDay)?.pnl ?? 0);
   const openToday = round(current - todayPnl);
-  // Reaching tomorrow's plan from what is held: the gap to today's target.
+  // What is still missing from today's target after today's trades so far.
   const needed = round(Math.max(0, today_.target - current));
   // Staying on the same compounding pace from today's real starting balance.
   const paceProfit = round(openToday * rate);
   // The furthest plan day whose target the balance has already passed.
   const onPlanDay = plan.filter((row) => row.target <= current).length;
+  // The first day after today that still needs a trade, with its reduced target.
+  const next = days.slice(currentDay).find((row) => row.targetProfit > 0) ?? null;
   const wins = trades.filter((trade) => Number(trade.pnl) > 0).length;
 
   return {
@@ -172,6 +187,7 @@ export function challengeState({ trades, startBalance = GOLD_START, startDate, t
       paceLot: lotFor(paceProfit),
       hit: current >= today_.target,
     },
+    next: next && { day: next.day, targetProfit: next.targetProfit, targetLot: next.targetLot, profit: next.profit, lot: next.lot },
     stats: {
       trades: trades.length,
       wins,

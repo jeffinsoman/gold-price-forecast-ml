@@ -60,6 +60,7 @@
       </div>
       <div class="day-track" aria-hidden="true"><span id="day-fill"></span></div>
       <p class="muted tiny" id="plan-compare"></p>
+      <p class="next-day" id="next-day" hidden></p>
     </section>
 
     <section class="card">
@@ -122,10 +123,10 @@
   <section id="page-plan" class="page hidden">
     <section class="card">
       <header class="card-head"><h2>100-day plan</h2><span class="muted tiny" id="rate-label"></span></header>
-      <p class="muted tiny">1.00 lot = AED 367 for a 100-point move (0.01 lot = AED 3.67). Lot = day's target profit ÷ 367.</p>
+      <p class="muted tiny">1.00 lot = AED 367 for a 100-point move (0.01 lot = AED 3.67). Lot = day's target profit ÷ 367. <b>Your target / Your lot</b> start from the balance you actually hold: profit above a target carries forward and cuts the next days (shown in green).<br />✅ hit or covered · 🟡 below target · 🔻 loss · ⏭️ no trade · ⏳ upcoming</p>
       <div class="table-wrap">
         <table class="plan-table">
-          <thead><tr><th>Day</th><th>Start</th><th>Target profit</th><th>Target</th><th>Lot</th><th>Your P&amp;L</th><th>Balance</th><th>Status</th></tr></thead>
+          <thead><tr><th>Day</th><th>Start</th><th>Target profit</th><th>Target</th><th>Lot</th><th>Your target</th><th>Your lot</th><th>Your P&amp;L</th><th>Balance</th><th></th></tr></thead>
           <tbody id="plan-body"></tbody>
         </table>
       </div>

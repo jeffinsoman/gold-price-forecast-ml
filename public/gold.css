@@ -79,10 +79,10 @@
 .tooltip i.plan { border-top: 2px dashed var(--plan); }
 
 /* ---------------------------------------------------------------- plan table */
-.table-wrap { overflow-x: auto; margin: 10px -18px -6px; padding: 0 18px; }
+.table-wrap { overflow-x: auto; margin: 10px -18px -6px; padding: 0 12px 0 18px; }
 .plan-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
 .plan-table th { text-align: right; font-weight: 600; color: var(--ink-faint); font-size: 0.72rem; padding: 6px 8px; white-space: nowrap; position: sticky; top: 0; background: var(--surface); }
-.plan-table td { text-align: right; padding: 7px 8px; border-top: 1px solid var(--line); white-space: nowrap; }
+.plan-table td { text-align: right; padding: 7px 6px; border-top: 1px solid var(--line); white-space: nowrap; }
 .plan-table th:first-child, .plan-table td:first-child { text-align: left; }
 .plan-table th:last-child, .plan-table td:last-child { text-align: center; }
 .plan-table tr.current td { background: var(--gold-wash); font-weight: 650; }
@@ -93,3 +93,9 @@
   font-size: 0.8rem; color: var(--ink-soft); background: var(--surface-sunk);
   border-radius: var(--radius-sm); padding: 12px 14px; line-height: 1.5;
 }
+
+.next-day {
+  margin-top: 10px; padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--gold-wash); font-size: 0.86rem; font-variant-numeric: tabular-nums;
+}
+.next-day .was { color: var(--ink-faint); text-decoration: line-through; margin-left: 4px; white-space: nowrap; }

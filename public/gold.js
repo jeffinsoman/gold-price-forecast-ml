@@ -5,6 +5,7 @@ const state = { data: null, editing: null, page: "today" };
 
 const STATUS = {
   hit: "✅ Target hit",
+  covered: "✅ Covered",
   short: "🟡 Below target",
   loss: "🔻 Loss day",
   skipped: "⏭️ No trade",
@@ -80,8 +81,8 @@ function renderToday(data) {
   }
 
   $("today-title").textContent = `Day ${today.day} target`;
-  const status = today.hit ? "hit" : today.pnl < 0 ? "loss" : today.pnl > 0 ? "short" : "upcoming";
-  $("today-status").textContent = today.hit ? STATUS.hit : today.pnl ? STATUS[status] : "⏳ Not traded yet";
+  const status = today.hit ? (today.trades ? "hit" : "covered") : today.pnl < 0 ? "loss" : today.pnl > 0 ? "short" : "upcoming";
+  $("today-status").textContent = today.hit ? STATUS[status] : today.pnl ? STATUS[status] : "⏳ Not traded yet";
   $("today-status").className = `status-tag ${status}`;
   $("k-needed").textContent = today.hit ? "Done ✅" : money(today.needed);
   $("k-lot").textContent = today.hit ? "—" : today.neededLot.toFixed(2);
@@ -91,9 +92,19 @@ function renderToday(data) {
   const span = today.target - today.openToday;
   const done = span > 0 ? Math.min(1, Math.max(0, today.pnl / span)) : 1;
   $("day-fill").style.width = `${(done * 100).toFixed(0)}%`;
-  $("plan-compare").textContent =
-    `PDF plan for Day ${today.day}: ${money(today.profit)} profit at ${today.lot.toFixed(4)} lot. ` +
-    `Same ${(data.rate * 100).toFixed(2)}% pace from your real balance: ${money(today.paceProfit)} at ${today.paceLot.toFixed(4)} lot.`;
+  $("plan-compare").textContent = adjustNote(today, data.balance);
+  const next = data.next;
+  $("next-day").hidden = !next || next.day > 100;
+  if (next) {
+    const cut = next.targetProfit < next.profit;
+    const skip = next.day - data.currentDay - 1;
+    const covered = skip > 0
+      ? `Day${skip > 1 ? "s" : ""} ${data.currentDay + 1}${skip > 1 ? `–${next.day - 1}` : ""} covered ✅<br>`
+      : "";
+    $("next-day").innerHTML =
+      `${covered}<b>Next: Day ${next.day}</b> · target ${money(next.targetProfit)} · lot ${next.targetLot.toFixed(4)}` +
+      (cut ? ` <span class="was">PDF ${money(next.profit)} · ${next.lot.toFixed(4)}</span>` : "");
+  }
 
   $("s-pnl").textContent = money(data.totalPnl, { sign: true });
   $("s-pnl").className = `wallet-value ${tone(data.totalPnl) === "out" ? "out" : ""}`;
@@ -106,6 +117,24 @@ function renderToday(data) {
   form.startDate.value = data.startDate;
   form.startBalance.value = data.startBalance;
   if (!data.started) $("setup-card").open = true;
+}
+
+/** Why today's target differs from the PDF: profit carried in, or a gap to catch up. */
+function adjustNote(today, balance) {
+  const pdf = `PDF plan for Day ${today.day}: ${money(today.profit)} at ${today.lot.toFixed(4)} lot.`;
+  const extra = balance - today.target;
+  if (today.trades && extra > 0.004) {
+    return `${pdf} Target beaten by ${money(extra)}, which carries forward and cuts the next day's target and lot.`;
+  }
+  if (today.carry > 0.004) {
+    return today.targetProfit === 0
+      ? `${pdf} Your extra ${money(today.carry)} from earlier days already covers it, so no trade is needed today.`
+      : `${pdf} Your extra ${money(today.carry)} from earlier days cuts it to ${money(today.targetProfit)} at ${today.targetLot.toFixed(4)} lot.`;
+  }
+  if (today.carry < -0.004) {
+    return `${pdf} You started the day ${money(-today.carry)} behind, so today's target is ${money(today.targetProfit)} to get back on plan.`;
+  }
+  return `${pdf} You are exactly on plan.`;
 }
 
 function renderTrades(data) {
@@ -153,9 +182,11 @@ function renderPlan(data) {
       <td>${row.profit.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
       <td>${row.target.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
       <td>${row.lot.toFixed(4)}</td>
+      <td class="${row.targetProfit < row.profit ? "num in" : ""}">${row.targetProfit.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+      <td class="${row.targetLot < row.lot ? "num in" : ""}">${row.targetLot.toFixed(4)}</td>
       <td class="num ${traded ? tone(row.pnl) : ""}">${traded ? money(row.pnl, { sign: true }).replace("AED ", "") : "—"}</td>
       <td>${row.day <= data.currentDay ? row.balance.toLocaleString("en-US", { minimumFractionDigits: 2 }) : "—"}</td>
-      <td><span class="status-tag ${row.status}">${STATUS[row.status]}</span></td>`;
+      <td><span class="status-tag ${row.status}" title="${STATUS[row.status].split(" ").slice(1).join(" ")}">${STATUS[row.status].split(" ")[0]}</span></td>`;
     body.append(tr);
   }
 }
@@ -281,7 +312,8 @@ function wire() {
   form.addEventListener("input", updatePnlHint);
   $("use-lot").addEventListener("click", () => {
     const t = state.data?.today;
-    if (t) form.lot.value = Math.max(0.01, Math.ceil((t.hit ? t.paceLot : t.neededLot) * 100) / 100).toFixed(2);
+    const lot = t && (t.hit ? state.data.next?.targetLot : t.neededLot);
+    if (lot) form.lot.value = Math.max(0.01, Math.ceil(lot * 100) / 100).toFixed(2);
     updatePnlHint();
   });
   $("trade-cancel").addEventListener("click", resetTradeForm);
