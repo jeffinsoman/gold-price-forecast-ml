@@ -200,6 +200,18 @@ main { max-width: 760px; margin: 0 auto; padding: 0 18px; }
 /* ---------------------------------------------------------------- forms */
 .form { display: flex; flex-direction: column; gap: 15px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 13px; }
+.plan { padding: 12px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 9px; }
+.plan:last-child { border-bottom: 0; }
+.plan-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px; margin: 0; }
+.plan-name { font-weight: 650; color: var(--ink); font-size: 0.95rem; }
+.plan-state { font-size: 0.78rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+/* Two short numbers stay side by side, even on a phone. */
+.plan .grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+.plan .field { font-size: 0.74rem; }
+.plan .field input { padding: 9px 10px; }
+.plan .btn { align-self: flex-start; padding: 7px 14px; font-size: 0.82rem; }
+.plans-total { display: block; font-size: 0.78rem; font-weight: 500; color: var(--ink-soft); font-variant-numeric: tabular-nums; margin-top: 2px; }
+
 /* A laid-out element still answers to hidden. */
 [hidden] { display: none !important; }
 

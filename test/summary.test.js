@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import {
   CARDS,
-  TABBY_CATEGORY,
+  PLANS,
   EXPENSE_CATEGORIES,
   EXPENSE_METHODS,
   accountBalances,
@@ -15,11 +15,12 @@ import {
   monthKey,
   monthLabel,
   summarize,
-  tabbyPlan,
+  planState,
+  planTotals,
   validateBillPayment,
   validateEntry,
   validateOpening,
-  validateTabbyPlan,
+  validatePlans,
 } from "../worker/summary.js";
 
 test("month keys, labels and shifts", () => {
@@ -399,6 +400,7 @@ test("the expense categories are the ones on the list", () => {
     "Active EMI Mashreq",
     "Active EMI DIB",
     "Tabby",
+    "Bank Loan",
   ]);
 
   for (const category of EXPENSE_CATEGORIES) {
@@ -417,16 +419,20 @@ test("the expense categories are the ones on the list", () => {
   assert.equal(validateEntry({ date: "2026-10-03", amount: 100, account: "Bank", category: "DIB EMI" }, "income").category, "Other");
 });
 
-test("the Tabby plan is paid down month by month out of the month's money", () => {
-  const fresh = tabbyPlan({ outstanding: 3600, monthly: 300, month: "2026-10" });
+test("a plan is paid down month by month out of the month's money", () => {
+  const fresh = planState({ name: "Tabby", outstanding: 3600, monthly: 300, month: "2026-10" });
   assert.equal(fresh.left, 3600);
   assert.equal(fresh.paidThisMonth, 0);
   assert.equal(fresh.stillDueThisMonth, 300);
 
-  const paid = tabbyPlan({
+  const paid = planState({
+    name: "Tabby",
     outstanding: 3600,
     monthly: 300,
-    paidRows: [{ month: "2026-09", total: 300 }, { month: "2026-10", total: 300 }],
+    paidRows: [
+      { plan: "Tabby", month: "2026-09", total: 300 },
+      { plan: "Tabby", month: "2026-10", total: 300 },
+    ],
     month: "2026-10",
   });
   assert.equal(paid.paid, 600);
@@ -435,55 +441,101 @@ test("the Tabby plan is paid down month by month out of the month's money", () =
   assert.equal(paid.stillDueThisMonth, 0);
 
   // Part of a month's instalment leaves the rest of it due.
-  const part = tabbyPlan({
+  const part = planState({
+    name: "Tabby",
     outstanding: 3600,
     monthly: 300,
-    paidRows: [{ month: "2026-10", total: 120 }],
+    paidRows: [{ plan: "Tabby", month: "2026-10", total: 120 }],
     month: "2026-10",
   });
   assert.equal(part.stillDueThisMonth, 180);
 
   // The last month only asks for what is left, and never goes below zero.
-  const tail = tabbyPlan({
+  const tail = planState({
+    name: "Tabby",
     outstanding: 500,
     monthly: 300,
-    paidRows: [{ month: "2026-09", total: 400 }],
+    paidRows: [{ plan: "Tabby", month: "2026-09", total: 400 }],
     month: "2026-10",
   });
   assert.equal(tail.left, 100);
   assert.equal(tail.stillDueThisMonth, 100);
 
-  const over = tabbyPlan({ outstanding: 500, monthly: 300, paidRows: [{ month: "2026-09", total: 900 }], month: "2026-10" });
+  const over = planState({
+    name: "Tabby",
+    outstanding: 500,
+    monthly: 300,
+    paidRows: [{ plan: "Tabby", month: "2026-09", total: 900 }],
+    month: "2026-10",
+  });
   assert.equal(over.left, 0);
   assert.equal(over.stillDueThisMonth, 0);
 
-  // No plan set: nothing is owed and nothing is due.
-  assert.deepEqual(tabbyPlan(), {
-    outstanding: 0,
-    monthly: 0,
-    paid: 0,
-    left: 0,
-    paidThisMonth: 0,
-    stillDueThisMonth: 0,
+  // Nothing set: nothing owed, nothing due.
+  const none = planState();
+  assert.equal(none.left, 0);
+  assert.equal(none.stillDueThisMonth, 0);
+});
+
+test("every card and the bank loan keep their own outstanding", () => {
+  assert.deepEqual(PLANS, ["Mashreq", "ADCB", "CBD", "DIB", "Tabby", "Bank Loan"]);
+
+  const plans = planTotals({
+    settings: {
+      Tabby: { outstanding: 3600, monthly: 300 },
+      ADCB: { outstanding: 12000, monthly: 1000 },
+      "Bank Loan": { outstanding: 50000, monthly: 2500 },
+    },
+    paidRows: [
+      { plan: "Tabby", month: "2026-10", total: 300 },
+      { plan: "ADCB", month: "2026-09", total: 1000 },
+    ],
+    month: "2026-10",
   });
+
+  assert.deepEqual(plans.list.map((plan) => plan.name), PLANS);
+  assert.equal(plans.outstanding, 65600);
+  assert.equal(plans.left, 64300);
+  assert.equal(plans.paidThisMonth, 300);
+
+  // Tabby is covered this month; the other two are still due.
+  assert.equal(plans.dueThisMonth, 3500);
+  const byName = Object.fromEntries(plans.list.map((plan) => [plan.name, plan]));
+  assert.equal(byName.Tabby.stillDueThisMonth, 0);
+  assert.equal(byName.ADCB.left, 11000);
+  assert.equal(byName.ADCB.stillDueThisMonth, 1000);
+  assert.equal(byName["Bank Loan"].stillDueThisMonth, 2500);
+
+  // A payment pays off its own plan and no one else's.
+  assert.equal(byName.CBD.paid, 0);
+  assert.equal(byName.Mashreq.left, 0);
 });
 
-test("the plan's two numbers are plain and never negative", () => {
-  assert.deepEqual(validateTabbyPlan({ outstanding: "3600", monthly: "300" }), { outstanding: 3600, monthly: 300 });
-  assert.deepEqual(validateTabbyPlan({}), { outstanding: 0, monthly: 0 });
-  assert.deepEqual(validateTabbyPlan({ outstanding: "", monthly: "" }), { outstanding: 0, monthly: 0 });
-  assert.throws(() => validateTabbyPlan({ outstanding: -5 }), /zero or more/);
-  assert.throws(() => validateTabbyPlan({ monthly: "soon" }), /zero or more/);
+test("the numbers behind each plan are plain and never negative", () => {
+  const saved = validatePlans({ Tabby: { outstanding: "3600", monthly: "300" }, ADCB: { outstanding: 12000 } });
+  assert.deepEqual(saved.Tabby, { outstanding: 3600, monthly: 300 });
+  assert.deepEqual(saved.ADCB, { outstanding: 12000, monthly: 0 });
+  assert.deepEqual(saved["Bank Loan"], { outstanding: 0, monthly: 0 });
+  assert.deepEqual(Object.keys(validatePlans({})), PLANS);
+  assert.throws(() => validatePlans({ DIB: { outstanding: -5 } }), /zero or more/);
+  assert.throws(() => validatePlans({ CBD: { monthly: "soon" } }), /zero or more/);
 });
 
-test("a plan payment is an ordinary expense filed under Tabby", () => {
+test("a plan payment is an ordinary expense that names its plan", () => {
   const row = validateEntry(
-    { date: "2026-10-03", amount: 300, method: "Bank", category: TABBY_CATEGORY, note: "Tabby instalment" },
+    { date: "2026-10-03", amount: 300, method: "Bank", category: "Tabby", plan: "Tabby", note: "Tabby payment" },
     "expense",
   );
-  assert.equal(row.category, "Tabby");
+  assert.equal(row.plan, "Tabby");
   assert.equal(row.method, "Bank");
   assert.equal(row.paid, 1);
+
+  // Most expenses pay off no plan at all, and a made-up one is refused.
+  assert.equal(validateEntry({ date: "2026-10-03", amount: 50, method: "Cash" }, "expense").plan, "");
+  assert.throws(
+    () => validateEntry({ date: "2026-10-03", amount: 50, method: "Cash", plan: "Postpay" }, "expense"),
+    /Plan must be one of/,
+  );
 
   // It leaves the bank like any other paid expense - no card bill involved.
   const held = accountBalances({

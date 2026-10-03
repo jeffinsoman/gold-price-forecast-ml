@@ -13,6 +13,7 @@ const ICONS = {
   CBD: "💳",
   DIB: "💳",
   Tabby: "🧿",
+  "Bank Loan": "🏦",
   Salary: "💼",
   Business: "🏢",
   Freelance: "💻",
@@ -526,7 +527,7 @@ async function loadMonth(month) {
       : [empty("No card payments in this month.")]),
   );
 
-  showTabby(data.tabby ?? { outstanding: 0, monthly: 0, left: 0, paidThisMonth: 0, stillDueThisMonth: 0 });
+  showPlans(data.plans ?? { list: [], left: 0, dueThisMonth: 0 });
 
   const opening = accounts.opening ?? {};
   const openingForm = $("opening-form");
@@ -659,68 +660,96 @@ function bindEntryForm(kind) {
   });
 }
 
-// The Tabby plan: a total already owed, and the instalment this month's money
-// has to cover. Recording it writes an ordinary expense, so it counts against
-// the month like any other payment and can be edited or deleted from the list.
-function showTabby(plan) {
-  const form = $("tabby-form");
-  const pay = $("tabby-pay");
-  form.outstanding.value = plan.outstanding || "";
-  form.monthly.value = plan.monthly || "";
-  pay.date.value = state.today;
-  const due = plan.stillDueThisMonth || plan.monthly;
-  pay.amount.value = due ? due : "";
-  pay.hidden = !(plan.outstanding > 0 || plan.monthly > 0);
-
+// Plans: money already owed on a card or a loan, paid down month by month. A
+// payment is written as an ordinary expense carrying the plan's name, so it
+// counts against the month and can be edited or deleted from the list.
+function showPlans(plans) {
   const label = shortMonth(state.month);
-  const parts = [];
-  if (plan.outstanding > 0) {
-    parts.push(plan.left > 0 ? `${money(plan.left)} left of ${money(plan.outstanding)}` : "Plan cleared");
-  }
-  if (plan.stillDueThisMonth > 0) parts.push(`${money(plan.stillDueThisMonth)} due in ${label}`);
-  else if (plan.paidThisMonth > 0) parts.push(`${label} covered · ${money(plan.paidThisMonth)} paid`);
-  $("tabby-state").textContent = parts.join(" · ");
-  // The saved-plan note goes stale the moment a payment moves the numbers.
-  $("tabby-msg").textContent = "";
+  const list = $("plans-list");
+
+  list.replaceChildren(
+    ...plans.list.map((plan) => {
+      const row = document.createElement("div");
+      row.className = "plan";
+      const bits = [];
+      if (plan.outstanding > 0) bits.push(plan.left > 0 ? `${money(plan.left)} left` : "cleared");
+      if (plan.stillDueThisMonth > 0) bits.push(`${money(plan.stillDueThisMonth)} due in ${label}`);
+      else if (plan.paidThisMonth > 0) bits.push(`${label} covered`);
+
+      row.innerHTML =
+        `<p class="plan-head"><span class="plan-name">` +
+        `<span aria-hidden="true">${icon(plan.name)}</span> ${plan.name}</span>` +
+        `<span class="plan-state">${bits.join(" · ")}</span></p>` +
+        `<div class="grid">` +
+        `<label class="field">Total outstanding <input type="number" name="${plan.name}:outstanding"` +
+        ` min="0" step="0.01" inputmode="decimal" placeholder="0" value="${plan.outstanding || ""}" /></label>` +
+        `<label class="field">This month <input type="number" name="${plan.name}:monthly"` +
+        ` min="0" step="0.01" inputmode="decimal" placeholder="0" value="${plan.monthly || ""}" /></label>` +
+        `</div>`;
+
+      if (plan.stillDueThisMonth > 0) {
+        const pay = document.createElement("button");
+        pay.type = "button";
+        pay.className = "btn ghost";
+        pay.textContent = `Pay ${money(plan.stillDueThisMonth)} now`;
+        pay.addEventListener("click", () => payPlan(plan));
+        row.append(pay);
+      }
+      return row;
+    }),
+  );
+
+  $("plans-state").textContent = plans.left > 0 || plans.dueThisMonth > 0
+    ? `${money(plans.left)} left${plans.dueThisMonth > 0 ? ` · ${money(plans.dueThisMonth)} due in ${label}` : ""}`
+    : "";
+  // The saved note goes stale the moment a payment moves the numbers.
+  $("plans-msg").textContent = "";
 }
 
-function bindTabbyForms() {
-  const form = $("tabby-form");
+async function payPlan(plan) {
+  const from = $("plan-accounts").querySelector('input[name="method"]:checked')?.value ?? "Bank";
+  try {
+    const result = await api("/expense", {
+      method: "POST",
+      body: JSON.stringify({
+        date: state.today,
+        amount: plan.stillDueThisMonth,
+        method: from,
+        category: (state.options.planCategories ?? {})[plan.name] ?? "Other",
+        note: `${plan.name} payment`,
+        plan: plan.name,
+        paid: 1,
+      }),
+    });
+    const left = result.plans.list.find((row) => row.name === plan.name)?.left ?? 0;
+    const text = `${icon(plan.name)} Paid ${money(result.entry.amount)} to ${plan.name} from ${from}.`;
+    toast(`${text} ${result.summary.statusMessage}.`, result.summary.isOverBudget ? "bad" : "ok");
+    await loadMonth(state.month);
+    message($("plans-msg"), `${text} ${left > 0 ? `${money(left)} left on it.` : "Nothing left on it."}`);
+  } catch (error) {
+    message($("plans-msg"), error.message, false);
+  }
+}
+
+function bindPlansForm() {
+  const form = $("plans-form");
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    const body = Object.fromEntries(new FormData(form).entries());
-    try {
-      const result = await api("/tabby", { method: "PUT", body: JSON.stringify(body) });
-      const plan = result.tabby;
-      message($("tabby-msg"), `Tabby plan saved: ${money(plan.left)} left, ${money(plan.monthly)} a month.`);
-      toast(`🧿 Tabby: ${money(plan.left)} left, ${money(plan.monthly)} a month.`);
-      await loadMonth(state.month);
-    } catch (error) {
-      message($("tabby-msg"), error.message, false);
+    const body = {};
+    for (const [key, value] of new FormData(form).entries()) {
+      const [name, field] = key.split(":");
+      if (!field) continue;
+      body[name] ??= {};
+      body[name][field] = value;
     }
-  });
-
-  const pay = $("tabby-pay");
-  pay.addEventListener("submit", async (event) => {
-    event.preventDefault();
     try {
-      const result = await api("/expense", {
-        method: "POST",
-        body: JSON.stringify({
-          date: pay.date.value,
-          amount: pay.amount.value,
-          method: pay.querySelector('input[name="method"]:checked')?.value ?? "Bank",
-          category: "Tabby",
-          note: "Tabby instalment",
-          paid: 1,
-        }),
-      });
-      const text = `🧿 Paid ${money(result.entry.amount)} to Tabby from ${result.entry.method}.`;
-      message($("tabby-pay-msg"), `${text} ${money(result.tabby.left)} left on the plan.`);
-      toast(`${text} ${result.summary.statusMessage}.`, result.summary.isOverBudget ? "bad" : "ok");
+      const result = await api("/plans", { method: "PUT", body: JSON.stringify(body) });
+      const text = `Outstanding saved: ${money(result.plans.left)} owed in all.`;
+      toast(text);
       await loadMonth(state.month);
+      message($("plans-msg"), text);
     } catch (error) {
-      message($("tabby-pay-msg"), error.message, false);
+      message($("plans-msg"), error.message, false);
     }
   });
 }
@@ -853,7 +882,7 @@ async function boot() {
   fillChoices($("income-accounts"), state.options.incomeAccounts, "account");
   fillChoices($("expense-methods"), state.options.expenseMethods, "method");
   fillChoices($("expense-cards"), state.options.cards ?? [], "card");
-  fillChoices($("tabby-accounts"), ["Cash", "Bank"], "method", "Bank");
+  fillChoices($("plan-accounts"), ["Cash", "Bank"], "method", "Bank");
   syncCardField($("expense-form"), $("expense-card-field"));
   fillChips($("income-categories"), state.options.incomeCategories, "category");
   fillChips($("expense-categories"), state.options.expenseCategories, "category");
@@ -871,7 +900,7 @@ async function boot() {
       syncCardField($("expense-form"), $("expense-card-field")),
     );
     bindOpeningForm();
-    bindTabbyForms();
+    bindPlansForm();
     bindCardForm();
     bindReset();
     $("month-picker").addEventListener("change", (event) => loadMonth(event.target.value));

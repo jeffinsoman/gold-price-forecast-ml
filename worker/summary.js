@@ -46,11 +46,24 @@ export const EXPENSE_CATEGORIES = [
   "Active EMI Mashreq",
   "Active EMI DIB",
   "Tabby",
+  "Bank Loan",
 ];
 
-// Tabby is also a plan: a total already owed, paid down month by month. Every
-// expense filed under this category is one of those payments.
-export const TABBY_CATEGORY = "Tabby";
+// Money already owed somewhere, paid down month by month: a total outstanding
+// and an instalment. Every plan payment is an ordinary expense carrying the
+// name of the plan it pays off.
+export const PLANS = ["Mashreq", "ADCB", "CBD", "DIB", "Tabby", "Bank Loan"];
+
+// The category a plan's payments are filed under, so the month's lines read
+// the way the rest of the tracker does.
+export const PLAN_CATEGORY = {
+  Mashreq: "Mashreq EMI",
+  ADCB: "ADCB EMI",
+  CBD: "CBD EMI",
+  DIB: "DIB EMI",
+  Tabby: "Tabby",
+  "Bank Loan": "Bank Loan",
+};
 
 // Categories used before the list above. Entries already filed under them keep
 // their category when edited, even though the pickers no longer offer them.
@@ -134,7 +147,7 @@ export function validateEntry(body, kind) {
     month: monthKey(date),
     amount: Math.round(amount * 100) / 100,
     [field]: choice,
-    ...(isIncome ? {} : { card }),
+    ...(isIncome ? {} : { card, plan: planName(body?.plan) }),
     category,
     friend: String(body?.friend ?? "").trim().slice(0, 60),
     note: String(body?.note ?? "").trim().slice(0, 200),
@@ -311,20 +324,22 @@ export function accountBalances({
 }
 
 /**
- * The Tabby plan: what was owed to start with, what the month's instalment is,
- * and how much of it the expenses filed under Tabby have paid off.
+ * One plan: what was owed to start with, what the month's instalment is, and
+ * how much of it the expenses filed against the plan have paid off.
  */
-export function tabbyPlan({ outstanding = 0, monthly = 0, paidRows = [], month } = {}) {
+export function planState({ name = "", outstanding = 0, monthly = 0, paidRows = [], month } = {}) {
   const round = (value) => Math.round(value * 100) / 100;
-  const paid = round(paidRows.reduce((sum, row) => sum + (Number(row.total ?? row.amount) || 0), 0));
+  const mine = paidRows.filter((row) => (row.plan ?? name) === name);
+  const paid = round(mine.reduce((sum, row) => sum + (Number(row.total ?? row.amount) || 0), 0));
   const thisMonth = round(
-    paidRows
+    mine
       .filter((row) => row.month === month)
       .reduce((sum, row) => sum + (Number(row.total ?? row.amount) || 0), 0),
   );
   const total = round(Number(outstanding) || 0);
   const due = round(Number(monthly) || 0);
   return {
+    name,
     outstanding: total,
     monthly: due,
     paid,
@@ -334,15 +349,53 @@ export function tabbyPlan({ outstanding = 0, monthly = 0, paidRows = [], month }
   };
 }
 
-/** The two numbers behind the plan, both plain and never negative. */
-export function validateTabbyPlan(body) {
-  const read = (key, label) => {
-    const raw = body?.[key];
+/** Every plan, in order, with the totals across them. */
+export function planTotals({ settings = {}, paidRows = [], month } = {}) {
+  const round = (value) => Math.round(value * 100) / 100;
+  const list = PLANS.map((name) =>
+    planState({
+      name,
+      outstanding: settings[name]?.outstanding,
+      monthly: settings[name]?.monthly,
+      paidRows,
+      month,
+    }),
+  );
+  const sum = (key) => round(list.reduce((total, plan) => total + plan[key], 0));
+  return {
+    list,
+    outstanding: sum("outstanding"),
+    left: sum("left"),
+    dueThisMonth: sum("stillDueThisMonth"),
+    paidThisMonth: sum("paidThisMonth"),
+  };
+}
+
+/** The two numbers behind each plan, both plain and never negative. */
+export function validatePlans(body) {
+  const read = (raw, label) => {
     const amount = raw === "" || raw === null || raw === undefined ? 0 : Number(raw);
     if (!Number.isFinite(amount) || amount < 0) throw new Error(`${label} must be zero or more.`);
     return Math.round(amount * 100) / 100;
   };
-  return { outstanding: read("outstanding", "Total outstanding"), monthly: read("monthly", "Monthly payment") };
+
+  const plans = {};
+  for (const name of PLANS) {
+    const given = body?.[name] ?? {};
+    plans[name] = {
+      outstanding: read(given.outstanding, `${name} total outstanding`),
+      monthly: read(given.monthly, `${name} monthly payment`),
+    };
+  }
+  return plans;
+}
+
+/** The plan an expense pays off, if it pays one off at all. */
+export function planName(value) {
+  const name = String(value ?? "").trim();
+  if (!name) return "";
+  if (!PLANS.includes(name)) throw new Error(`Plan must be one of ${PLANS.join(", ")}.`);
+  return name;
 }
 
 /** An opening balance is a plain number per account, and may be negative. */

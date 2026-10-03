@@ -9,9 +9,10 @@ import {
   CARDS,
   LEGACY_CARD,
   cardName,
-  TABBY_CATEGORY,
-  tabbyPlan,
-  validateTabbyPlan,
+  PLANS,
+  PLAN_CATEGORY,
+  planTotals,
+  validatePlans,
   INCOME_ACCOUNTS as ACCOUNTS,
   accountBalances,
   addMonths,
@@ -84,12 +85,17 @@ function ensureSchema(db) {
     await addColumn("card_payment", "method TEXT NOT NULL DEFAULT 'Credit Card'");
     await addColumn("expense", "card TEXT NOT NULL DEFAULT ''");
     await addColumn("card_payment", "card TEXT NOT NULL DEFAULT ''");
+    await addColumn("expense", "plan TEXT NOT NULL DEFAULT ''");
 
     try {
       // Tabby used to be a payment method of its own; it is a card now.
       await db.batch([
         db.prepare("UPDATE expense SET method = 'Credit Card', card = 'Tabby' WHERE method = 'Tabby'"),
         db.prepare("UPDATE card_payment SET card = method WHERE card = '' AND method <> ''"),
+        // The Tabby plan came before the others, keyed on its own.
+        db.prepare("UPDATE expense SET plan = 'Tabby' WHERE plan = '' AND category = 'Tabby'"),
+        db.prepare("UPDATE settings SET key = 'plan:Tabby:outstanding' WHERE key = 'tabby:outstanding'"),
+        db.prepare("UPDATE settings SET key = 'plan:Tabby:monthly' WHERE key = 'tabby:monthly'"),
       ]);
     } catch {
       // Nothing to move.
@@ -144,22 +150,21 @@ async function held(db, month) {
   };
 }
 
-/** The Tabby plan: the stored numbers, plus what has been paid off so far. */
-async function tabby(db, month) {
+/** Every plan: the stored numbers, plus what has been paid off so far. */
+async function plans(db, month) {
   const [stored, paid] = await db.batch([
-    db.prepare("SELECT key, value FROM settings WHERE key IN ('tabby:outstanding', 'tabby:monthly')"),
-    db
-      .prepare("SELECT month, SUM(amount) AS total FROM expense WHERE category = ?1 AND paid = 1 GROUP BY month")
-      .bind(TABBY_CATEGORY),
+    db.prepare("SELECT key, value FROM settings WHERE key LIKE 'plan:%'"),
+    db.prepare("SELECT plan, month, SUM(amount) AS total FROM expense WHERE plan <> '' AND paid = 1 GROUP BY plan, month"),
   ]);
 
-  const settings = Object.fromEntries(stored.results.map((row) => [row.key, Number(row.value) || 0]));
-  return tabbyPlan({
-    outstanding: settings["tabby:outstanding"],
-    monthly: settings["tabby:monthly"],
-    paidRows: paid.results,
-    month,
-  });
+  const settings = Object.fromEntries(PLANS.map((name) => [name, { outstanding: 0, monthly: 0 }]));
+  for (const row of stored.results) {
+    const [, name, field] = row.key.split(":");
+    if (settings[name] && (field === "outstanding" || field === "monthly")) {
+      settings[name][field] = Number(row.value) || 0;
+    }
+  }
+  return planTotals({ settings, paidRows: paid.results, month });
 }
 
 /** What is still owed on each bill, across every month. */
@@ -193,7 +198,7 @@ async function monthData(db, month) {
     friends(db),
     db.prepare("SELECT * FROM card_payment WHERE month = ?1 ORDER BY date DESC, id DESC").bind(month).all(),
     billsPending(db),
-    tabby(db, month),
+    plans(db, month),
   ]);
 
   const total = (rows) => rows.reduce((sum, row) => sum + Number(row.amount), 0);
@@ -219,7 +224,7 @@ async function monthData(db, month) {
       bills: accounts.bills.map((bill) => ({ ...bill, pendingAllTime: pending[bill.card] ?? 0 })),
     },
     billPayments: payments.results,
-    tabby: plan,
+    plans: plan,
     friends: withFriends,
   };
 }
@@ -255,6 +260,8 @@ async function handleApi(request, env, url) {
       months: await availableMonths(db),
       friends: (await friends(db)).map((row) => row.friend),
       options: {
+        plans: PLANS,
+        planCategories: PLAN_CATEGORY,
         incomeAccounts: INCOME_ACCOUNTS,
         expenseMethods: EXPENSE_METHODS,
         cards: CARDS,
@@ -284,13 +291,13 @@ async function handleApi(request, env, url) {
           table === "income"
             ? "INSERT INTO income (date, month, amount, account, category, friend, note, received)" +
                 " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
-            : "INSERT INTO expense (date, month, amount, method, category, friend, note, paid, card)" +
-                " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            : "INSERT INTO expense (date, month, amount, method, category, friend, note, paid, card, plan)" +
+                " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )
         .bind(
           ...[row.date, row.month, row.amount, row[field], row.category, row.friend, row.note],
           table === "income" ? row.received : row.paid,
-          ...(table === "income" ? [] : [row.card]),
+          ...(table === "income" ? [] : [row.card, row.plan]),
         )
         .run();
       return json({ id: result.meta.last_row_id, entry: row, ...(await monthData(db, row.month)) }, 201);
@@ -302,12 +309,12 @@ async function handleApi(request, env, url) {
           ? "UPDATE income SET date = ?1, month = ?2, amount = ?3, account = ?4, category = ?5," +
               " friend = ?6, note = ?7, received = ?9 WHERE id = ?8"
           : "UPDATE expense SET date = ?1, month = ?2, amount = ?3, method = ?4, category = ?5," +
-              " friend = ?6, note = ?7, paid = ?9, card = ?10 WHERE id = ?8",
+              " friend = ?6, note = ?7, paid = ?9, card = ?10, plan = ?11 WHERE id = ?8",
       )
       .bind(
         ...[row.date, row.month, row.amount, row[field], row.category, row.friend, row.note, Number(entry[2])],
         table === "income" ? row.received : row.paid,
-        ...(table === "income" ? [] : [row.card]),
+        ...(table === "income" ? [] : [row.card, row.plan]),
       )
       .run();
     if (!result.meta.changes) return fail("That entry no longer exists.", 404);
@@ -342,21 +349,23 @@ async function handleApi(request, env, url) {
     return json({ opening, ...(await monthData(db, monthKey(today()))) });
   }
 
-  // GET|PUT /api/tabby - the total owed to Tabby and the monthly instalment.
-  if (method === "GET" && path === "tabby") {
-    return json({ tabby: await tabby(db, monthKey(today())) });
+  // GET|PUT /api/plans - what is owed on each loan or card, and the instalment.
+  if (method === "GET" && path === "plans") {
+    return json({ plans: await plans(db, monthKey(today())) });
   }
 
-  if (method === "PUT" && path === "tabby") {
-    const plan = validateTabbyPlan(await readJson(request));
+  if (method === "PUT" && path === "plans") {
+    const saved = validatePlans(await readJson(request));
     await db.batch(
-      Object.entries(plan).map(([key, amount]) =>
-        db
-          .prepare(
-            "INSERT INTO settings (key, value) VALUES (?1, ?2)" +
-              " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-          )
-          .bind(`tabby:${key}`, String(amount)),
+      Object.entries(saved).flatMap(([name, values]) =>
+        Object.entries(values).map(([field, amount]) =>
+          db
+            .prepare(
+              "INSERT INTO settings (key, value) VALUES (?1, ?2)" +
+                " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            )
+            .bind(`plan:${name}:${field}`, String(amount)),
+        ),
       ),
     );
     return json(await monthData(db, monthKey(today())));
