@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="light dark" />
+<title>Gold Challenge</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%A5%87</text></svg>" />
+<link rel="stylesheet" href="/styles.css" />
+<link rel="stylesheet" href="/gold.css" />
+</head>
+<body class="gold">
+<header class="topbar">
+  <div class="greeting">
+    <p class="eyebrow">XAUUSD · Deriv · AED 200 → AED 100,000</p>
+    <h1 id="day-title">Gold challenge</h1>
+  </div>
+  <div class="topbar-controls">
+    <a class="pill-link" href="/">💰 Money</a>
+  </div>
+</header>
+
+<nav class="tabbar" id="tabs">
+  <button class="tab is-active" data-page="today"><span aria-hidden="true">🎯</span><span>Today</span></button>
+  <button class="tab" data-page="trades"><span aria-hidden="true">📒</span><span>Trades</span></button>
+  <button class="tab" data-page="plan"><span aria-hidden="true">🗓️</span><span>100-day plan</span></button>
+</nav>
+
+<main>
+  <!-- TODAY -->
+  <section id="page-today" class="page">
+    <details class="card" id="setup-card">
+      <summary>⚙️ Challenge start</summary>
+      <form id="setup-form" class="form">
+        <p class="muted tiny">Day 1 is the start date. Each calendar day after it is the next challenge day.</p>
+        <div class="grid">
+          <label class="field">Start date (day 1) <input type="date" name="startDate" required /></label>
+          <label class="field">Starting balance (AED) <input type="number" name="startBalance" min="1" step="0.01" value="200" required /></label>
+        </div>
+        <button class="btn primary gold-btn" type="submit">Save start</button>
+      </form>
+    </details>
+
+    <article class="hero gold-hero">
+      <p class="hero-label">Account balance</p>
+      <p class="hero-value" id="balance">—</p>
+      <p class="hero-sum" id="balance-sum">AED 200 start</p>
+      <div class="goal-track" aria-hidden="true"><span id="goal-fill"></span></div>
+      <p class="hero-note" id="goal-note"></p>
+      <p class="pace" id="pace"></p>
+    </article>
+
+    <section class="card today-card">
+      <header class="card-head"><h2>🎯 <span id="today-title">Day 1 target</span></h2><span class="status-tag" id="today-status"></span></header>
+      <div class="kpis">
+        <div><p class="kpi-label">Profit needed today</p><p class="kpi-value" id="k-needed">—</p></div>
+        <div><p class="kpi-label">Lot for 100 pts</p><p class="kpi-value" id="k-lot">—</p></div>
+        <div><p class="kpi-label">End-of-day target</p><p class="kpi-value" id="k-target">—</p></div>
+        <div><p class="kpi-label">P&amp;L today</p><p class="kpi-value" id="k-today">—</p></div>
+      </div>
+      <div class="day-track" aria-hidden="true"><span id="day-fill"></span></div>
+      <p class="muted tiny" id="plan-compare"></p>
+    </section>
+
+    <section class="card">
+      <header class="card-head"><h2>📈 Balance vs plan</h2><span class="muted tiny">log scale</span></header>
+      <div class="legend">
+        <span><i class="key actual"></i>Your balance</span>
+        <span><i class="key plan"></i>Plan target</span>
+      </div>
+      <div class="chart" id="chart"></div>
+    </section>
+
+    <div class="wallets">
+      <article class="wallet"><span class="wallet-icon" aria-hidden="true">📊</span><div><p class="wallet-label">Total P&amp;L</p><p class="wallet-value" id="s-pnl">—</p></div></article>
+      <article class="wallet"><span class="wallet-icon" aria-hidden="true">✅</span><div><p class="wallet-label" id="s-win-label">Win rate</p><p class="wallet-value" id="s-win">—</p></div></article>
+      <article class="wallet"><span class="wallet-icon" aria-hidden="true">🏁</span><div><p class="wallet-label">Days on target</p><p class="wallet-value" id="s-days">—</p></div></article>
+      <article class="wallet"><span class="wallet-icon" aria-hidden="true">🧾</span><div><p class="wallet-label">Trades</p><p class="wallet-value" id="s-trades">—</p></div></article>
+    </div>
+
+    <p class="warning">⚠️ This is a mathematical target plan, not a guarantee. AED 200 → AED 100,000 is a 500× increase. The lot sizes are what one 100-point winning move needs to hit the day's profit. They are <strong>not</strong> safe lot sizes and do not allow for spread, slippage, stop-loss distance or losing trades.</p>
+  </section>
+
+  <!-- TRADES -->
+  <section id="page-trades" class="page hidden">
+    <form id="trade-form" class="card form">
+      <h2>Log a trade</h2>
+      <div class="grid">
+        <label class="field">Date <input type="date" name="date" required /></label>
+        <label class="field">Challenge day <input type="number" name="day" min="1" max="100" step="1" required /></label>
+      </div>
+      <fieldset class="field">
+        <legend>Direction</legend>
+        <div class="choices">
+          <label class="choice"><input type="radio" name="direction" value="Buy" checked /><span>⬆️ Buy</span></label>
+          <label class="choice"><input type="radio" name="direction" value="Sell" /><span>⬇️ Sell</span></label>
+        </div>
+      </fieldset>
+      <div class="grid">
+        <label class="field">Lot size <input type="number" name="lot" min="0.01" step="0.01" inputmode="decimal" required />
+          <span class="quick"><button type="button" class="quick-btn" id="use-lot">Use today's lot</button></span></label>
+        <label class="field">Profit / loss (AED) <input type="number" name="pnl" step="0.01" inputmode="decimal" placeholder="e.g. 12.82 or -5" />
+          <span class="tiny muted" id="pnl-hint">Leave blank to work it out from entry and exit.</span></label>
+      </div>
+      <div class="grid">
+        <label class="field">Entry price (optional) <input type="number" name="entry" step="0.01" inputmode="decimal" placeholder="2650.00" /></label>
+        <label class="field">Exit price (optional) <input type="number" name="exit" step="0.01" inputmode="decimal" placeholder="2651.00" /></label>
+      </div>
+      <label class="field">Note (optional) <input type="text" name="note" maxlength="200" placeholder="Setup, reason, lesson…" /></label>
+      <button class="btn primary gold-btn" type="submit" id="trade-submit">Save trade</button>
+      <button class="btn ghost hidden" type="button" id="trade-cancel">Cancel edit</button>
+      <p class="form-msg" id="trade-msg"></p>
+    </form>
+
+    <section class="card">
+      <header class="card-head"><h2>Trade journal</h2><span class="card-total" id="trades-total">—</span></header>
+      <div id="trade-list"></div>
+    </section>
+  </section>
+
+  <!-- PLAN -->
+  <section id="page-plan" class="page hidden">
+    <section class="card">
+      <header class="card-head"><h2>100-day plan</h2><span class="muted tiny" id="rate-label"></span></header>
+      <p class="muted tiny">1.00 lot = AED 367 for a 100-point move (0.01 lot = AED 3.67). Lot = day's target profit ÷ 367.</p>
+      <div class="table-wrap">
+        <table class="plan-table">
+          <thead><tr><th>Day</th><th>Start</th><th>Target profit</th><th>Target</th><th>Lot</th><th>Your P&amp;L</th><th>Balance</th><th>Status</th></tr></thead>
+          <tbody id="plan-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+</main>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<script src="/gold.js" type="module"></script>
+</body>
+</html>

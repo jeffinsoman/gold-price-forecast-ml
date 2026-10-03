@@ -1,0 +1,95 @@
+/*
+ * Gold challenge page. Builds on /styles.css. Chart pair checked with the
+ * dataviz validator: balance gold #b07d0e / plan indigo #5b5bd6 (light),
+ * #b98a1a / #7375d8 (dark). The two lines also differ by dash, and the
+ * legend names both, so they are never told apart by colour alone.
+ */
+:root {
+  --gold: #b07d0e;
+  --gold-wash: rgba(176, 125, 14, 0.13);
+  --plan: #5b5bd6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --gold: #b98a1a;
+    --gold-wash: rgba(185, 138, 26, 0.2);
+    --plan: #7375d8;
+  }
+}
+
+.gold .tabbar { grid-template-columns: repeat(3, 1fr); }
+@media (min-width: 720px) { .gold .tabbar { grid-template-columns: repeat(3, max-content); } }
+.gold .tab.is-active { color: var(--gold); background: var(--gold-wash); }
+.gold-btn, .btn.primary.gold-btn { background: var(--gold); color: #fff; }
+
+.pill-link {
+  font-size: 0.85rem; color: var(--ink); text-decoration: none; white-space: nowrap;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px;
+}
+
+#setup-card summary { cursor: pointer; font-weight: 650; color: var(--ink-soft); }
+#setup-card[open] summary { margin-bottom: 12px; }
+
+.gold-hero { background: linear-gradient(152deg, var(--surface), var(--surface) 55%, var(--gold-wash)); }
+.goal-track, .day-track {
+  height: 8px; border-radius: 999px; background: var(--surface-sunk); margin-top: 14px; overflow: hidden;
+}
+.goal-track span, .day-track span {
+  display: block; height: 100%; width: 0; background: var(--gold); border-radius: 999px; transition: width 0.45s ease;
+}
+.pace { margin-top: 10px; font-size: 0.86rem; font-weight: 650; }
+.pace.ahead { color: var(--in); }
+.pace.behind { color: var(--out); }
+
+.kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px 12px; }
+@media (min-width: 560px) { .kpis { grid-template-columns: repeat(4, 1fr); } }
+.kpi-label { font-size: 0.76rem; color: var(--ink-soft); }
+.kpi-value { font-size: 1.22rem; font-weight: 750; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.kpi-value.in, .num.in { color: var(--in); }
+.kpi-value.out, .num.out { color: var(--out); }
+.today-card .muted.tiny { margin-top: 10px; }
+
+.status-tag { font-size: 0.74rem; padding: 3px 10px; border-radius: 999px; background: var(--surface-sunk); color: var(--ink-soft); white-space: nowrap; }
+.status-tag.hit { background: var(--in-wash); color: var(--in); }
+.status-tag.loss, .status-tag.skipped { background: var(--out-wash); color: var(--out); }
+.status-tag.short { background: var(--gold-wash); color: var(--gold); }
+
+/* ---------------------------------------------------------------- chart */
+.legend { display: flex; gap: 16px; font-size: 0.8rem; color: var(--ink-soft); margin-bottom: 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.gold .wallets { grid-template-columns: repeat(2, 1fr); }
+.key { display: inline-block; align-self: center; width: 18px; height: 0; border-top: 2px solid var(--gold); }
+.key.plan { border-top: 2px dashed var(--plan); }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; }
+.chart .grid-line { stroke: var(--line); stroke-width: 1; }
+.chart .axis-label { fill: var(--ink-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart .plan-line { fill: none; stroke: var(--plan); stroke-width: 2; stroke-dasharray: 5 4; }
+.chart .actual-line { fill: none; stroke: var(--gold); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .actual-dot { fill: var(--gold); stroke: var(--surface); stroke-width: 2; }
+.chart .cross { stroke: var(--ink-faint); stroke-width: 1; }
+.chart .end-label { font-size: 11px; font-weight: 650; fill: var(--ink-soft); }
+.tooltip {
+  position: absolute; top: 4px; pointer-events: none; z-index: 2;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow);
+  padding: 8px 11px; font-size: 0.8rem; line-height: 1.45; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.tooltip b { display: block; margin-bottom: 2px; }
+.tooltip i { display: inline-block; width: 12px; margin-right: 6px; vertical-align: middle; border-top: 2px solid var(--gold); }
+.tooltip i.plan { border-top: 2px dashed var(--plan); }
+
+/* ---------------------------------------------------------------- plan table */
+.table-wrap { overflow-x: auto; margin: 10px -18px -6px; padding: 0 18px; }
+.plan-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.plan-table th { text-align: right; font-weight: 600; color: var(--ink-faint); font-size: 0.72rem; padding: 6px 8px; white-space: nowrap; position: sticky; top: 0; background: var(--surface); }
+.plan-table td { text-align: right; padding: 7px 8px; border-top: 1px solid var(--line); white-space: nowrap; }
+.plan-table th:first-child, .plan-table td:first-child { text-align: left; }
+.plan-table th:last-child, .plan-table td:last-child { text-align: center; }
+.plan-table tr.current td { background: var(--gold-wash); font-weight: 650; }
+
+.gold .entry-icon { width: 34px; height: 34px; display: grid; place-items: center; background: var(--surface-sunk); border-radius: 11px; }
+
+.warning {
+  font-size: 0.8rem; color: var(--ink-soft); background: var(--surface-sunk);
+  border-radius: var(--radius-sm); padding: 12px 14px; line-height: 1.5;
+}
