@@ -99,13 +99,20 @@ Below the card: carried forward, income, expense and the balance, then this mont
 expenses as two lists, each row editable and deletable.
 
 ### Adding entries
-**Income** — date, amount, received into **Cash in Hand** or **Bank**, a category and a note.
+**Income** — date, amount, received into **Cash in Hand** or **Bank**, a category, an optional
+friend and a note.
 
 **Expense** — date (today, or later for something due), amount, paid by **Cash**, **Bank** or
-**Credit Card**, a category and a note.
+**Credit Card**, a category, an optional friend and a note.
 
 Categories are icon chips rather than dropdowns, amounts have `+50 / +100 / +500 / +1,000` buttons,
 and the currency label (AED by default) is set once in the header.
+
+### Friends
+Any entry can carry a name. Tag an expense when money goes to someone and the income when it comes
+back, and the **With friends** panel nets the two per person — *AED 200 they owe*, or *settled* once
+it balances. Names already used are offered as suggestions on the forms. Nothing else changes: these
+are ordinary entries, counted in the month like everything else.
 
 ### Start over
 The **Start over** section at the bottom of the Month page deletes every entry in every month. It
@@ -127,6 +134,6 @@ takes two taps and cannot be undone.
 | --- | --- | --- |
 | GET | `/api/bootstrap` | Form choices, today's date, months that hold entries |
 | GET | `/api/month/:month` | Summary and both lists for `2026-10` |
-| POST | `/api/income` · `/api/expense` | `{ date, amount, account \| method, category, note }` |
+| POST | `/api/income` · `/api/expense` | `{ date, amount, account \| method, category, friend, note }` |
 | PATCH · DELETE | `/api/income/:id` · `/api/expense/:id` | Edit or remove an entry |
 | POST | `/api/reset` | `{ "confirm": "RESET" }` — empties the tracker |

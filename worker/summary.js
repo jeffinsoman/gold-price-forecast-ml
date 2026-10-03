@@ -89,8 +89,32 @@ export function validateEntry(body, kind) {
     amount: Math.round(amount * 100) / 100,
     [field]: choice,
     category,
+    friend: String(body?.friend ?? "").trim().slice(0, 60),
     note: String(body?.note ?? "").trim().slice(0, 200),
   };
+}
+
+/**
+ * Money tagged with a name, netted per friend: what went out to them against
+ * what came back. A positive net means they still have some of yours.
+ */
+export function friendTotals(outRows = [], backRows = []) {
+  const names = new Map();
+  const add = (rows, key) => {
+    for (const row of rows) {
+      const friend = String(row.friend ?? "").trim();
+      if (!friend) continue;
+      const entry = names.get(friend) ?? { friend, out: 0, back: 0 };
+      entry[key] += Number(row.total ?? row.amount) || 0;
+      names.set(friend, entry);
+    }
+  };
+  add(outRows, "out");
+  add(backRows, "back");
+
+  return [...names.values()]
+    .map((entry) => ({ ...entry, net: Math.round((entry.out - entry.back) * 100) / 100 }))
+    .sort((a, b) => b.net - a.net || a.friend.localeCompare(b.friend));
 }
 
 /**

@@ -7,6 +7,7 @@ import {
   INCOME_ACCOUNTS,
   INCOME_CATEGORIES,
   addMonths,
+  friendTotals,
   monthKey,
   summarize,
   today,
@@ -36,6 +37,26 @@ async function readJson(request) {
 }
 
 // -------------------------------------------------------------------
+// SCHEMA
+// -------------------------------------------------------------------
+// Deploys do not run migrations, so a column the code needs is added here on
+// first use. Adding one that already exists throws, which is the signal to stop.
+let schemaReady = null;
+
+function ensureSchema(db) {
+  schemaReady ??= (async () => {
+    for (const table of ["income", "expense"]) {
+      try {
+        await db.prepare(`ALTER TABLE ${table} ADD COLUMN friend TEXT NOT NULL DEFAULT ''`).run();
+      } catch {
+        // Already there.
+      }
+    }
+  })();
+  return schemaReady;
+}
+
+// -------------------------------------------------------------------
 // QUERIES
 // -------------------------------------------------------------------
 /** What every earlier month left behind: income minus expense, all time before `month`. */
@@ -50,11 +71,21 @@ async function carriedForward(db, month) {
   return Number(row?.carried) || 0;
 }
 
+/** Everything tagged with a name, netted per friend, across every month. */
+async function friends(db) {
+  const [out, back] = await db.batch([
+    db.prepare("SELECT friend, SUM(amount) AS total FROM expense WHERE friend <> '' GROUP BY friend"),
+    db.prepare("SELECT friend, SUM(amount) AS total FROM income WHERE friend <> '' GROUP BY friend"),
+  ]);
+  return friendTotals(out.results, back.results);
+}
+
 async function monthData(db, month) {
-  const [income, expense, carried] = await Promise.all([
+  const [income, expense, carried, withFriends] = await Promise.all([
     db.prepare("SELECT * FROM income WHERE month = ?1 ORDER BY date DESC, id DESC").bind(month).all(),
     db.prepare("SELECT * FROM expense WHERE month = ?1 ORDER BY date DESC, id DESC").bind(month).all(),
     carriedForward(db, month),
+    friends(db),
   ]);
 
   const total = (rows) => rows.reduce((sum, row) => sum + Number(row.amount), 0);
@@ -68,6 +99,7 @@ async function monthData(db, month) {
     }),
     income: income.results,
     expenses: expense.results,
+    friends: withFriends,
   };
 }
 
@@ -89,6 +121,7 @@ async function availableMonths(db) {
 async function handleApi(request, env, url) {
   const db = env.DB;
   if (!db) return fail("No D1 binding named DB. Check wrangler.jsonc.", 500);
+  await ensureSchema(db);
 
   const path = url.pathname.replace(/^\/api\/?/, "");
   const method = request.method.toUpperCase();
@@ -99,6 +132,7 @@ async function handleApi(request, env, url) {
       today: today(),
       currentMonth: monthKey(today()),
       months: await availableMonths(db),
+      friends: (await friends(db)).map((row) => row.friend),
       options: {
         incomeAccounts: INCOME_ACCOUNTS,
         expenseMethods: EXPENSE_METHODS,
@@ -125,18 +159,20 @@ async function handleApi(request, env, url) {
     if (method === "POST") {
       const result = await db
         .prepare(
-          `INSERT INTO ${table} (date, month, amount, ${field}, category, note) VALUES (?1, ?2, ?3, ?4, ?5, ?6)`,
+          `INSERT INTO ${table} (date, month, amount, ${field}, category, friend, note)` +
+            " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         )
-        .bind(row.date, row.month, row.amount, row[field], row.category, row.note)
+        .bind(row.date, row.month, row.amount, row[field], row.category, row.friend, row.note)
         .run();
       return json({ id: result.meta.last_row_id, entry: row, ...(await monthData(db, row.month)) }, 201);
     }
 
     const result = await db
       .prepare(
-        `UPDATE ${table} SET date = ?1, month = ?2, amount = ?3, ${field} = ?4, category = ?5, note = ?6 WHERE id = ?7`,
+        `UPDATE ${table} SET date = ?1, month = ?2, amount = ?3, ${field} = ?4, category = ?5,` +
+          " friend = ?6, note = ?7 WHERE id = ?8",
       )
-      .bind(row.date, row.month, row.amount, row[field], row.category, row.note, Number(entry[2]))
+      .bind(row.date, row.month, row.amount, row[field], row.category, row.friend, row.note, Number(entry[2]))
       .run();
     if (!result.meta.changes) return fail("That entry no longer exists.", 404);
     return json({ id: Number(entry[2]), entry: row, ...(await monthData(db, row.month)) });

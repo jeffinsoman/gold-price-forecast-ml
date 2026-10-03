@@ -193,7 +193,7 @@ function entryTable(rows, kind) {
   const table = document.createElement("table");
   table.innerHTML =
     `<thead><tr><th>Date</th><th>${kind === "income" ? "Account" : "Paid by"}</th>` +
-    `<th>Category</th><th>Note</th><th class="amount">Amount</th><th></th></tr></thead>`;
+    `<th>Category</th><th>Friend</th><th>Note</th><th class="amount">Amount</th><th></th></tr></thead>`;
 
   const body = document.createElement("tbody");
   for (const row of rows) {
@@ -203,6 +203,7 @@ function entryTable(rows, kind) {
       `<td>${dayLabel(row.date)}${due}</td>` +
       `<td><span aria-hidden="true">${icon(row[source])}</span> ${row[source]}</td>` +
       `<td><span class="tag"><span aria-hidden="true">${icon(row.category)}</span> ${row.category}</span></td>` +
+      `<td>${row.friend ? `<span class="tag friend">🤝 ${row.friend}</span>` : ""}</td>` +
       `<td>${row.note || ""}</td>` +
       `<td class="amount">${money(row.amount)}</td>`;
 
@@ -248,6 +249,7 @@ function openEdit(kind, row) {
       values: income ? state.options.incomeCategories : state.options.expenseCategories,
       value: row.category,
     },
+    { type: "text", name: "friend", label: "Friend", value: row.friend ?? "" },
     { type: "text", name: "note", label: "Note", value: row.note },
   ];
 
@@ -350,10 +352,40 @@ async function loadMonth(month) {
     ? `${money(s.available)} available this month, ${Math.round(s.usedPct)}% of it spent.`
     : `${money(s.carriedForward)} carried in. Add income and expenses to see this month take shape.`;
 
+  drawFriends(data.friends ?? []);
+
   $("income-count").textContent = data.income.length;
   $("expense-count").textContent = data.expenses.length;
   $("month-income").replaceChildren(entryTable(data.income, "income"));
   $("month-expenses").replaceChildren(entryTable(data.expenses, "expense"));
+}
+
+/** Who is holding your money, and who you have squared up with. */
+function drawFriends(rows) {
+  const panel = $("friends-panel");
+  panel.hidden = rows.length === 0;
+  if (!rows.length) return;
+
+  $("friends-count").textContent = rows.filter((row) => row.net !== 0).length;
+
+  const max = Math.max(1, ...rows.map((row) => Math.abs(row.net)));
+  const list = document.createElement("ul");
+  list.className = "bars";
+
+  for (const row of rows) {
+    const settled = row.net === 0;
+    const theyOwe = row.net > 0;
+    const item = document.createElement("li");
+    item.innerHTML =
+      `<span class="bar-name"><span aria-hidden="true">🤝</span> ${row.friend}</span>` +
+      `<span class="bar-value">${settled ? "settled" : money(Math.abs(row.net))}` +
+      `<span class="muted small"> ${settled ? "" : theyOwe ? "they owe" : "you owe"}</span></span>` +
+      `<span class="bar-track"><span class="bar-fill ${theyOwe ? "income" : "expense"}" ` +
+      `style="width:${(Math.abs(row.net) / max) * 100}%"></span></span>` +
+      `<span class="muted small friend-detail">${money(row.out)} out · ${money(row.back)} back</span>`;
+    list.append(item);
+  }
+  $("friends-list").replaceChildren(list);
 }
 
 // -------------------------------------------------------------------
@@ -371,12 +403,14 @@ function bindEntryForm(kind) {
       amount: form.amount.value,
       [field]: form.querySelector(`input[name="${field}"]:checked`)?.value,
       category: form.querySelector('input[name="category"]:checked')?.value,
+      friend: form.friend.value,
       note: form.note.value,
     };
     try {
       const result = await api(`/${kind}`, { method: "POST", body: JSON.stringify(body) });
       const where = result.entry[field];
-      const text = `${icon(where)} Saved ${money(result.entry.amount)} ${kind === "income" ? "into" : "by"} ${where} on ${dayLabel(result.entry.date)}.`;
+      const who = result.entry.friend ? ` ${kind === "income" ? "from" : "to"} ${result.entry.friend}` : "";
+      const text = `${icon(where)} Saved ${money(result.entry.amount)} ${kind === "income" ? "into" : "by"} ${where}${who} on ${dayLabel(result.entry.date)}.`;
       message($(`${kind}-msg`), `${text} ${result.summary.label}: ${result.summary.statusMessage}.`, !result.summary.isOverBudget);
       toast(`${text} ${result.summary.statusMessage}.`, result.summary.isOverBudget ? "bad" : "ok");
       form.reset();
@@ -460,6 +494,9 @@ async function boot() {
   state.currentMonth = bootstrap.currentMonth;
   state.months = bootstrap.months;
   state.options = bootstrap.options;
+  $("friend-names").innerHTML = (bootstrap.friends ?? [])
+    .map((name) => `<option value="${name}"></option>`)
+    .join("");
   state.month = state.months.includes(state.month) ? state.month : bootstrap.currentMonth;
 
   fillChoices($("income-accounts"), state.options.incomeAccounts, "account");

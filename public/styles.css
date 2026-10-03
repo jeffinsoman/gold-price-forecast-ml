@@ -245,3 +245,7 @@ h3 { display: flex; align-items: center; gap: 7px; }
 .panel.danger[open] summary { margin-bottom: 10px; }
 .danger-btn { border-color: var(--red); color: var(--red); margin-top: 10px; }
 .danger-btn.armed { background: var(--red); color: #fff; border-color: var(--red); }
+
+/* Names on entries */
+.tag.friend { background: rgba(37, 99, 235, 0.14); color: var(--blue); }
+.friend-detail { grid-column: 1 / -1; }

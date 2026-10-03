@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { addMonths, isIsoDate, monthKey, monthLabel, summarize, validateEntry } from "../worker/summary.js";
+import {
+  addMonths,
+  friendTotals,
+  isIsoDate,
+  monthKey,
+  monthLabel,
+  summarize,
+  validateEntry,
+} from "../worker/summary.js";
 
 test("month keys, labels and shifts", () => {
   assert.equal(monthKey("2026-10-03"), "2026-10");
@@ -74,6 +82,7 @@ test("entries are validated and normalised", () => {
     amount: 9000,
     account: "Bank",
     category: "Salary",
+    friend: "",
     note: "pay",
   });
 
@@ -85,4 +94,37 @@ test("entries are validated and normalised", () => {
   assert.throws(() => validateEntry({ date: "2026-10-01", amount: 10, account: "Credit Card" }, "income"), /Account must be/);
   assert.throws(() => validateEntry({ date: "bad", amount: 10, method: "Cash" }, "expense"), /real date/);
   assert.throws(() => validateEntry({ date: "2026-10-01", amount: 10, method: "Cash in Hand" }, "expense"), /Payment method/);
+});
+
+test("a friend's name rides along with the entry", () => {
+  const out = validateEntry(
+    { date: "2026-10-02", amount: 500, method: "Cash", category: "Other", friend: "  Rahul  " },
+    "expense",
+  );
+  assert.equal(out.friend, "Rahul");
+
+  // Long names are trimmed to something a table can show.
+  const long = validateEntry(
+    { date: "2026-10-02", amount: 5, method: "Cash", friend: "x".repeat(200) },
+    "expense",
+  );
+  assert.equal(long.friend.length, 60);
+});
+
+test("money is netted per friend", () => {
+  const totals = friendTotals(
+    [{ friend: "Rahul", total: 500 }, { friend: "Ali", total: 200 }, { friend: "", total: 90 }],
+    [{ friend: "Rahul", total: 300 }],
+  );
+  assert.deepEqual(totals, [
+    { friend: "Ali", out: 200, back: 0, net: 200 },
+    { friend: "Rahul", out: 500, back: 300, net: 200 },
+  ]);
+
+  // Paid back in full: settled. Owing them more than went out: negative.
+  const settled = friendTotals([{ friend: "Rahul", total: 500 }], [{ friend: "Rahul", total: 500 }]);
+  assert.equal(settled[0].net, 0);
+
+  const owed = friendTotals([], [{ friend: "Sam", total: 400 }]);
+  assert.equal(owed[0].net, -400);
 });

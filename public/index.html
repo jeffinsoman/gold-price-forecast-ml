@@ -62,6 +62,12 @@
       <div id="month-expenses"></div>
     </div>
 
+    <div class="panel" id="friends-panel" hidden>
+      <h3><span aria-hidden="true">🤝</span> With friends <span class="pill" id="friends-count">0</span></h3>
+      <div id="friends-list"></div>
+      <p class="muted small">Tag an expense with a name when money goes to someone, and tag the income when it comes back.</p>
+    </div>
+
     <details class="panel danger">
       <summary><span aria-hidden="true">⚠️</span> Start over</summary>
       <p class="muted small">Deletes every income and expense entry, for every month. There is no undo.</p>
@@ -88,7 +94,10 @@
         <legend>Category</legend>
         <div class="chips" id="income-categories"></div>
       </fieldset>
-      <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
+      <div class="grid">
+        <label class="field">Friend (optional) <input type="text" name="friend" maxlength="60" list="friend-names" placeholder="Who paid you back?" /></label>
+        <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
+      </div>
       <button class="primary" type="submit">Save income</button>
       <p class="form-msg" id="income-msg"></p>
     </form>
@@ -112,12 +121,17 @@
         <legend>Category</legend>
         <div class="chips" id="expense-categories"></div>
       </fieldset>
-      <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
+      <div class="grid">
+        <label class="field">Friend (optional) <input type="text" name="friend" maxlength="60" list="friend-names" placeholder="Who did it go to?" /></label>
+        <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
+      </div>
       <button class="primary" type="submit">Save expense</button>
       <p class="form-msg" id="expense-msg"></p>
     </form>
   </section>
 </main>
+
+<datalist id="friend-names"></datalist>
 
 <div id="toasts" class="toasts" aria-live="polite"></div>
 
