@@ -200,6 +200,9 @@ main { max-width: 760px; margin: 0 auto; padding: 0 18px; }
 /* ---------------------------------------------------------------- forms */
 .form { display: flex; flex-direction: column; gap: 15px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 13px; }
+/* A laid-out element still answers to hidden. */
+[hidden] { display: none !important; }
+
 .field { display: flex; flex-direction: column; gap: 7px; font-size: 0.82rem; color: var(--ink-soft); }
 fieldset.field { border: none; padding: 0; margin: 0; }
 legend { padding: 0; margin-bottom: 8px; }

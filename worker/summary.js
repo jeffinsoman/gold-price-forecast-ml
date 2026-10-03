@@ -2,11 +2,20 @@
 // Pure functions: no D1, no Worker globals, so they can be unit tested directly.
 
 export const INCOME_ACCOUNTS = ["Cash in Hand", "Bank"];
-export const EXPENSE_METHODS = ["Cash", "Bank", "Credit Card", "Tabby"];
+export const EXPENSE_METHODS = ["Cash", "Bank", "Credit Card"];
 
-// Ways of paying that owe someone later: spending on one adds to its bill, and
-// the bill is settled from the bank.
-export const BILL_METHODS = ["Credit Card", "Tabby"];
+// Paying by credit does not move money now: the spend goes on one of these
+// cards, builds up as that card's bill, and the bill is settled from the bank.
+export const CARDS = ["Mashreq", "ADCB", "CBD", "DIB", "Tabby"];
+
+// Credit spends recorded before the cards had names sit under this label, so
+// their bill can still be seen and paid off.
+export const LEGACY_CARD = "Credit Card";
+
+/** The bill a credit expense belongs to - its card, or the unnamed old one. */
+export function cardName(value) {
+  return String(value ?? "").trim() || LEGACY_CARD;
+}
 
 export const INCOME_CATEGORIES = [
   "Salary",
@@ -108,11 +117,19 @@ export function validateEntry(body, kind) {
     category = "Other";
   }
 
+  // A credit spend says which card it went on; nothing else carries one.
+  let card = "";
+  if (!isIncome && choice === "Credit Card") {
+    card = String(body?.card ?? "").trim();
+    if (!CARDS.includes(card)) throw new Error(`Credit must be one of ${CARDS.join(", ")}.`);
+  }
+
   const row = {
     date,
     month: monthKey(date),
     amount: Math.round(amount * 100) / 100,
     [field]: choice,
+    ...(isIncome ? {} : { card }),
     category,
     friend: String(body?.friend ?? "").trim().slice(0, 60),
     note: String(body?.note ?? "").trim().slice(0, 200),
@@ -250,7 +267,7 @@ export function accountBalances({
   const balances = Object.fromEntries(
     INCOME_ACCOUNTS.map((account) => [account, round(Number(opening[account]) || 0)]),
   );
-  const charged = Object.fromEntries(BILL_METHODS.map((method) => [method, 0]));
+  const charged = Object.fromEntries(CARDS.map((card) => [card, 0]));
 
   for (const row of incomeRows) {
     if (row.account in balances) balances[row.account] += Number(row.total ?? row.amount) || 0;
@@ -259,14 +276,23 @@ export function accountBalances({
     const amount = Number(row.total ?? row.amount) || 0;
     if (row.method === "Cash") balances["Cash in Hand"] -= amount;
     else if (row.method === "Bank") balances.Bank -= amount;
-    else if (row.method in charged) charged[row.method] += amount;
+    else if (row.method === "Credit Card") {
+      const card = cardName(row.card);
+      charged[card] = (charged[card] ?? 0) + amount;
+    }
+  }
+
+  // A card paid off that has no charges left here still shows, so its payment
+  // is accounted for.
+  for (const card of Object.keys(billsPaid)) {
+    if (!(card in charged) && Number(billsPaid[card])) charged[card] = 0;
   }
 
   // Settling a bill is the moment the money leaves the bank.
-  const bills = BILL_METHODS.map((method) => {
-    const paid = round(Number(billsPaid[method]) || 0);
+  const bills = Object.keys(charged).map((card) => {
+    const paid = round(Number(billsPaid[card]) || 0);
     balances.Bank -= paid;
-    return { method, charged: round(charged[method]), paid, pending: round(charged[method] - paid) };
+    return { card, charged: round(charged[card]), paid, pending: round(charged[card] - paid) };
   });
 
   for (const account of Object.keys(balances)) balances[account] = round(balances[account]);
@@ -291,10 +317,12 @@ export function validateOpening(body) {
   return opening;
 }
 
-/** A payment off a bill: money leaving the bank to settle the card or Tabby. */
+/** A payment off a card bill: money leaving the bank to settle that card. */
 export function validateBillPayment(body, pending) {
-  const method = String(body?.method ?? BILL_METHODS[0]).trim();
-  if (!BILL_METHODS.includes(method)) throw new Error(`Bill must be one of ${BILL_METHODS.join(", ")}.`);
+  const card = String(body?.card ?? body?.method ?? CARDS[0]).trim();
+  if (!CARDS.includes(card) && card !== LEGACY_CARD) {
+    throw new Error(`Credit must be one of ${CARDS.join(", ")}.`);
+  }
 
   const date = String(body?.date ?? "").trim();
   if (!isIsoDate(date)) throw new Error("Date must be a real date in YYYY-MM-DD format.");
@@ -304,11 +332,11 @@ export function validateBillPayment(body, pending) {
 
   const rounded = Math.round(amount * 100) / 100;
   if (pending !== undefined && rounded > Math.round(pending * 100) / 100 + 0.001) {
-    throw new Error(`Only ${pending.toLocaleString("en-US")} is pending on ${method}.`);
+    throw new Error(`Only ${pending.toLocaleString("en-US")} is pending on ${card}.`);
   }
 
   return {
-    method,
+    card,
     date,
     month: monthKey(date),
     amount: rounded,

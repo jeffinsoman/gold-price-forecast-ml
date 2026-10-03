@@ -7,6 +7,11 @@ const ICONS = {
   Cash: "💵",
   Bank: "🏦",
   "Credit Card": "💳",
+  // Credit cards
+  Mashreq: "💳",
+  ADCB: "💳",
+  CBD: "💳",
+  DIB: "💳",
   Tabby: "🧿",
   Salary: "💼",
   Business: "🏢",
@@ -196,9 +201,15 @@ function lineRow({ label, total, share, kind }) {
   return li;
 }
 
+/** The card picker belongs to credit only: it shows when credit is chosen. */
+function syncCardField(form, field) {
+  const method = form.querySelector('input[name="method"]:checked')?.value;
+  field.hidden = method !== "Credit Card";
+}
+
 function entryRow(row, kind) {
   const income = kind === "income";
-  const where = income ? row.account : row.method;
+  const where = income ? row.account : row.method === "Credit Card" && row.card ? row.card : row.method;
   const item = document.createElement("div");
   item.className = "entry";
   item.innerHTML =
@@ -231,7 +242,7 @@ function entryRow(row, kind) {
       toast(
         income
           ? `Received ${money(row.amount)} into ${row.account}.`
-          : `Paid ${money(row.amount)} by ${row.method}.`,
+          : `Paid ${money(row.amount)} by ${where}.`,
       );
       await loadMonth(state.month);
     });
@@ -287,6 +298,18 @@ function openEdit(kind, row) {
       values: withOwn(income ? state.options.incomeCategories : state.options.expenseCategories, row.category),
       value: row.category,
     },
+    ...(income
+      ? []
+      : [
+          {
+            type: "radio",
+            name: "card",
+            label: "Which credit?",
+            values: state.options.cards ?? [],
+            value: row.card || undefined,
+            showsWhen: "Credit Card",
+          },
+        ]),
     { type: "text", name: "friend", label: "Friend", value: row.friend ?? "" },
     { type: "text", name: "note", label: "Note", value: row.note },
   ];
@@ -320,6 +343,7 @@ function openEdit(kind, row) {
       set.className = "field";
       set.innerHTML = `<legend>${field.label}</legend><div class="${field.type === "chips" ? "chips" : "choices"}"></div>`;
       (field.type === "chips" ? fillChips : fillChoices)(set.querySelector("div"), field.values, field.name, field.value);
+      if (field.showsWhen) set.dataset.showsWhen = field.showsWhen;
       holder.append(set);
       continue;
     }
@@ -336,6 +360,13 @@ function openEdit(kind, row) {
     }
     label.append(input);
     holder.append(label);
+  }
+
+  const cardSet = holder.querySelector('[data-shows-when="Credit Card"]');
+  if (cardSet) {
+    const follow = () => syncCardField($("edit-form"), cardSet);
+    holder.querySelectorAll('input[name="method"]').forEach((input) => input.addEventListener("change", follow));
+    follow();
   }
 
   editSubmit = async (body) => {
@@ -464,10 +495,12 @@ async function loadMonth(month) {
     if (!bill.charged && !bill.pending) continue;
     const node = document.createElement("article");
     node.className = "wallet card-wallet bill-wallet";
+    // Paying more off a card than it was charged leaves it in credit.
+    const ahead = bill.pending < 0;
     node.innerHTML =
-      `<span class="wallet-icon" aria-hidden="true">${icon(bill.method)}</span>` +
-      `<div><p class="wallet-label">${bill.method} pending</p>` +
-      `<p class="wallet-value out">${money(bill.pending)}</p>` +
+      `<span class="wallet-icon" aria-hidden="true">${icon(bill.card)}</span>` +
+      `<div><p class="wallet-label">${bill.card} ${ahead ? "in credit" : "pending"}</p>` +
+      `<p class="wallet-value ${ahead ? "in" : "out"}">${money(Math.abs(bill.pending))}</p>` +
       `<p class="line-sub">${money(bill.charged)} charged · ${money(bill.paid)} paid</p></div>`;
     wallets.append(node);
   }
@@ -477,12 +510,12 @@ async function loadMonth(month) {
   const settle = $("card-settle");
   settle.hidden = owing.length === 0;
   if (owing.length) {
-    const chosen = $("card-form").querySelector('input[name="method"]:checked')?.value;
+    const chosen = $("card-form").querySelector('input[name="card"]:checked')?.value;
     fillChoices(
       $("bill-methods"),
-      owing.map((bill) => bill.method),
-      "method",
-      owing.some((bill) => bill.method === chosen) ? chosen : undefined,
+      owing.map((bill) => bill.card),
+      "card",
+      owing.some((bill) => bill.card === chosen) ? chosen : undefined,
     );
     syncBillLimit();
   }
@@ -490,7 +523,7 @@ async function loadMonth(month) {
   $("card-payments").replaceChildren(
     ...(data.billPayments.length
       ? data.billPayments.map(cardPaymentRow)
-      : [empty("No bill payments in this month.")]),
+      : [empty("No card payments in this month.")]),
   );
 
   const opening = accounts.opening ?? {};
@@ -551,7 +584,7 @@ async function loadMonth(month) {
 }
 
 function cardPaymentRow(row) {
-  const bill = row.method ?? "Credit Card";
+  const bill = row.card || row.method || "Credit Card";
   const item = document.createElement("div");
   item.className = "entry";
   item.innerHTML =
@@ -594,12 +627,16 @@ function bindEntryForm(kind) {
       friend: form.friend.value,
       note: form.note.value,
       ...(kind === "expense"
-        ? { paid: form.querySelector('input[name="paid"]:checked')?.value }
+        ? {
+            paid: form.querySelector('input[name="paid"]:checked')?.value,
+            card: form.querySelector('input[name="card"]:checked')?.value,
+          }
         : { received: form.querySelector('input[name="received"]:checked')?.value }),
     };
     try {
       const result = await api(`/${kind}`, { method: "POST", body: JSON.stringify(body) });
-      const where = result.entry[field];
+      const entered = result.entry;
+      const where = field === "method" && entered.method === "Credit Card" && entered.card ? entered.card : entered[field];
       const who = result.entry.friend ? ` ${kind === "income" ? "from" : "to"} ${result.entry.friend}` : "";
       const settled = kind === "expense" ? result.entry.paid : result.entry.received;
       const text = settled
@@ -611,6 +648,8 @@ function bindEntryForm(kind) {
       toast(`${text}. ${result.summary.statusMessage}.`, result.summary.isOverBudget ? "bad" : "ok");
       form.reset();
       form.date.value = state.today;
+      // A reset puts the method back to cash without firing a change.
+      if (kind === "expense") syncCardField(form, $("expense-card-field"));
       await loadMonth(state.month);
     } catch (error) {
       message($(`${kind}-msg`), error.message, false);
@@ -639,7 +678,7 @@ function bindOpeningForm() {
 function syncBillLimit() {
   const form = $("card-form");
   const bill = (state.data?.accounts?.bills ?? []).find(
-    (row) => row.method === form.querySelector('input[name="method"]:checked')?.value,
+    (row) => row.card === form.querySelector('input[name="card"]:checked')?.value,
   );
   const pending = bill?.pendingAllTime ?? 0;
   form.amount.max = pending;
@@ -652,13 +691,13 @@ function bindCardForm() {
   $("bill-methods").addEventListener("change", syncBillLimit);
 
   const send = async (amount) => {
-    const which = form.querySelector('input[name="method"]:checked')?.value;
+    const which = form.querySelector('input[name="card"]:checked')?.value;
     try {
       const result = await api("/bill-payments", {
         method: "POST",
-        body: JSON.stringify({ method: which, amount, date: form.date.value, note: form.note.value }),
+        body: JSON.stringify({ card: which, amount, date: form.date.value, note: form.note.value }),
       });
-      const left = result.accounts.bills.find((row) => row.method === which)?.pendingAllTime ?? 0;
+      const left = result.accounts.bills.find((row) => row.card === which)?.pendingAllTime ?? 0;
       const text = `${icon(which)} Paid ${money(result.payment.amount)} off ${which} from the bank.`;
       message($("card-msg"), `${text} ${left > 0 ? `${money(left)} still pending.` : "Nothing pending now."}`);
       toast(text);
@@ -745,6 +784,8 @@ async function boot() {
 
   fillChoices($("income-accounts"), state.options.incomeAccounts, "account");
   fillChoices($("expense-methods"), state.options.expenseMethods, "method");
+  fillChoices($("expense-cards"), state.options.cards ?? [], "card");
+  syncCardField($("expense-form"), $("expense-card-field"));
   fillChips($("income-categories"), state.options.incomeCategories, "category");
   fillChips($("expense-categories"), state.options.expenseCategories, "category");
 
@@ -757,6 +798,9 @@ async function boot() {
     bindEditDialog();
     bindEntryForm("income");
     bindEntryForm("expense");
+    $("expense-methods").addEventListener("change", () =>
+      syncCardField($("expense-form"), $("expense-card-field")),
+    );
     bindOpeningForm();
     bindCardForm();
     bindReset();

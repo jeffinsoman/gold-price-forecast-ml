@@ -6,7 +6,9 @@ import {
   EXPENSE_METHODS,
   INCOME_ACCOUNTS,
   INCOME_CATEGORIES,
-  BILL_METHODS,
+  CARDS,
+  LEGACY_CARD,
+  cardName,
   INCOME_ACCOUNTS as ACCOUNTS,
   accountBalances,
   addMonths,
@@ -52,36 +54,43 @@ let schemaReady = null;
 
 function ensureSchema(db) {
   schemaReady ??= (async () => {
-    for (const table of ["income", "expense"]) {
-      try {
-        await db.prepare(`ALTER TABLE ${table} ADD COLUMN friend TEXT NOT NULL DEFAULT ''`).run();
-      } catch {
-        // Already there.
-      }
-    }
-    for (const [table, column] of [
-      ["expense", "paid"],
-      ["income", "received"],
-    ]) {
-      try {
-        await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} INTEGER NOT NULL DEFAULT 1`).run();
-      } catch {
-        // Already there.
-      }
-    }
-    try {
-      await db.prepare("ALTER TABLE card_payment ADD COLUMN method TEXT NOT NULL DEFAULT 'Credit Card'").run();
-    } catch {
-      // Already there.
-    }
+    // Tables first, so a brand new database is complete before anything is
+    // added to it. Workers Builds does not run migrations, so every change in
+    // migrations/ is repeated here, written to be safe to run again.
     await db.batch([
       db.prepare("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)"),
       db.prepare(
         "CREATE TABLE IF NOT EXISTS card_payment (id INTEGER PRIMARY KEY AUTOINCREMENT," +
           " date TEXT NOT NULL, month TEXT NOT NULL, amount REAL NOT NULL CHECK (amount > 0)," +
-          " note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+          " note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now'))," +
+          " method TEXT NOT NULL DEFAULT 'Credit Card', card TEXT NOT NULL DEFAULT '')",
       ),
     ]);
+
+    const addColumn = async (table, definition) => {
+      try {
+        await db.prepare(`ALTER TABLE ${table} ADD COLUMN ${definition}`).run();
+      } catch {
+        // Already there.
+      }
+    };
+    await addColumn("income", "friend TEXT NOT NULL DEFAULT ''");
+    await addColumn("expense", "friend TEXT NOT NULL DEFAULT ''");
+    await addColumn("expense", "paid INTEGER NOT NULL DEFAULT 1");
+    await addColumn("income", "received INTEGER NOT NULL DEFAULT 1");
+    await addColumn("card_payment", "method TEXT NOT NULL DEFAULT 'Credit Card'");
+    await addColumn("expense", "card TEXT NOT NULL DEFAULT ''");
+    await addColumn("card_payment", "card TEXT NOT NULL DEFAULT ''");
+
+    try {
+      // Tabby used to be a payment method of its own; it is a card now.
+      await db.batch([
+        db.prepare("UPDATE expense SET method = 'Credit Card', card = 'Tabby' WHERE method = 'Tabby'"),
+        db.prepare("UPDATE card_payment SET card = method WHERE card = '' AND method <> ''"),
+      ]);
+    } catch {
+      // Nothing to move.
+    }
   })();
   return schemaReady;
 }
@@ -107,15 +116,18 @@ async function held(db, month) {
       .prepare("SELECT account, SUM(amount) AS total FROM income WHERE month <= ?1 AND received = 1 GROUP BY account")
       .bind(month),
     db
-      .prepare("SELECT method, SUM(amount) AS total FROM expense WHERE month <= ?1 AND paid = 1 GROUP BY method")
+      .prepare(
+        "SELECT method, card, SUM(amount) AS total FROM expense WHERE month <= ?1 AND paid = 1" +
+          " GROUP BY method, card",
+      )
       .bind(month),
     db
-      .prepare("SELECT method, SUM(amount) AS paid FROM card_payment WHERE month <= ?1 GROUP BY method")
+      .prepare("SELECT card, SUM(amount) AS paid FROM card_payment WHERE month <= ?1 GROUP BY card")
       .bind(month),
   ]);
 
   const billsPaid = {};
-  for (const row of card.results) billsPaid[row.method ?? "Credit Card"] = Number(row.paid) || 0;
+  for (const row of card.results) billsPaid[cardName(row.card)] = Number(row.paid) || 0;
 
   const opening = await openingBalances(db);
   return {
@@ -132,19 +144,14 @@ async function held(db, month) {
 /** What is still owed on each bill, across every month. */
 async function billsPending(db) {
   const [charged, paid] = await db.batch([
-    db
-      .prepare("SELECT method, SUM(amount) AS total FROM expense WHERE paid = 1 AND method IN (?1, ?2) GROUP BY method")
-      .bind(...BILL_METHODS),
-    db.prepare("SELECT method, SUM(amount) AS total FROM card_payment GROUP BY method"),
+    db.prepare("SELECT card, SUM(amount) AS total FROM expense WHERE paid = 1 AND method = 'Credit Card' GROUP BY card"),
+    db.prepare("SELECT card, SUM(amount) AS total FROM card_payment GROUP BY card"),
   ]);
 
-  const owed = Object.fromEntries(BILL_METHODS.map((method) => [method, 0]));
-  for (const row of charged.results) owed[row.method] += Number(row.total) || 0;
-  for (const row of paid.results) {
-    const method = row.method ?? "Credit Card";
-    if (method in owed) owed[method] -= Number(row.total) || 0;
-  }
-  for (const method of BILL_METHODS) owed[method] = Math.round(owed[method] * 100) / 100;
+  const owed = Object.fromEntries([...CARDS, LEGACY_CARD].map((card) => [card, 0]));
+  for (const row of charged.results) owed[cardName(row.card)] = (owed[cardName(row.card)] ?? 0) + (Number(row.total) || 0);
+  for (const row of paid.results) owed[cardName(row.card)] = (owed[cardName(row.card)] ?? 0) - (Number(row.total) || 0);
+  for (const card of Object.keys(owed)) owed[card] = Math.round(owed[card] * 100) / 100;
   return owed;
 }
 
@@ -187,7 +194,7 @@ async function monthData(db, month) {
     toCome: awaited,
     accounts: {
       ...accounts,
-      bills: accounts.bills.map((bill) => ({ ...bill, pendingAllTime: pending[bill.method] ?? 0 })),
+      bills: accounts.bills.map((bill) => ({ ...bill, pendingAllTime: pending[bill.card] ?? 0 })),
     },
     billPayments: payments.results,
     friends: withFriends,
@@ -227,6 +234,7 @@ async function handleApi(request, env, url) {
       options: {
         incomeAccounts: INCOME_ACCOUNTS,
         expenseMethods: EXPENSE_METHODS,
+        cards: CARDS,
         incomeCategories: INCOME_CATEGORIES,
         expenseCategories: EXPENSE_CATEGORIES,
       },
@@ -253,12 +261,13 @@ async function handleApi(request, env, url) {
           table === "income"
             ? "INSERT INTO income (date, month, amount, account, category, friend, note, received)" +
                 " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)"
-            : "INSERT INTO expense (date, month, amount, method, category, friend, note, paid)" +
-                " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            : "INSERT INTO expense (date, month, amount, method, category, friend, note, paid, card)" +
+                " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )
         .bind(
           ...[row.date, row.month, row.amount, row[field], row.category, row.friend, row.note],
           table === "income" ? row.received : row.paid,
+          ...(table === "income" ? [] : [row.card]),
         )
         .run();
       return json({ id: result.meta.last_row_id, entry: row, ...(await monthData(db, row.month)) }, 201);
@@ -270,11 +279,12 @@ async function handleApi(request, env, url) {
           ? "UPDATE income SET date = ?1, month = ?2, amount = ?3, account = ?4, category = ?5," +
               " friend = ?6, note = ?7, received = ?9 WHERE id = ?8"
           : "UPDATE expense SET date = ?1, month = ?2, amount = ?3, method = ?4, category = ?5," +
-              " friend = ?6, note = ?7, paid = ?9 WHERE id = ?8",
+              " friend = ?6, note = ?7, paid = ?9, card = ?10 WHERE id = ?8",
       )
       .bind(
         ...[row.date, row.month, row.amount, row[field], row.category, row.friend, row.note, Number(entry[2])],
         table === "income" ? row.received : row.paid,
+        ...(table === "income" ? [] : [row.card]),
       )
       .run();
     if (!result.meta.changes) return fail("That entry no longer exists.", 404);
@@ -313,13 +323,13 @@ async function handleApi(request, env, url) {
   if (method === "POST" && path === "bill-payments") {
     const body = await readJson(request);
     const owed = await billsPending(db);
-    const which = String(body?.method ?? BILL_METHODS[0]);
+    const which = String(body?.card ?? body?.method ?? CARDS[0]);
     if (!(owed[which] > 0)) return fail(`Nothing is pending on ${which}.`);
 
     const row = validateBillPayment(body, owed[which]);
     const result = await db
-      .prepare("INSERT INTO card_payment (date, month, amount, note, method) VALUES (?1, ?2, ?3, ?4, ?5)")
-      .bind(row.date, row.month, row.amount, row.note, row.method)
+      .prepare("INSERT INTO card_payment (date, month, amount, note, method, card) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
+      .bind(row.date, row.month, row.amount, row.note, row.card, row.card)
       .run();
     return json({ id: result.meta.last_row_id, payment: row, ...(await monthData(db, row.month)) }, 201);
   }

@@ -62,9 +62,9 @@
     <p class="muted tiny" id="wallet-note"></p>
 
     <details class="card" id="card-settle" hidden>
-      <summary><span aria-hidden="true">💳</span> Pay a bill from the bank</summary>
+      <summary><span aria-hidden="true">💳</span> Pay a card from the bank</summary>
       <form id="card-form" class="form">
-        <fieldset class="field"><legend>Which bill?</legend><div class="choices" id="bill-methods"></div></fieldset>
+        <fieldset class="field"><legend>Which card?</legend><div class="choices" id="bill-methods"></div></fieldset>
         <div class="grid">
           <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" required /></label>
           <label class="field">Date <input type="date" name="date" required /></label>
@@ -193,6 +193,7 @@
         </div>
       </fieldset>
       <fieldset class="field"><legend>Paid by</legend><div class="choices" id="expense-methods"></div></fieldset>
+      <fieldset class="field" id="expense-card-field" hidden><legend>Which credit?</legend><div class="choices" id="expense-cards"></div></fieldset>
       <fieldset class="field"><legend>Category</legend><div class="chips" id="expense-categories"></div></fieldset>
       <div class="grid">
         <label class="field">Friend (optional) <input type="text" name="friend" maxlength="60" list="friend-names" placeholder="Who did it go to?" /></label>
