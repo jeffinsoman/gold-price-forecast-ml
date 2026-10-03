@@ -116,7 +116,7 @@ main { max-width: 760px; margin: 0 auto; padding: 0 18px; }
 .hero-note { font-size: 0.82rem; color: var(--ink-soft); margin-top: 9px; }
 
 /* ---------------------------------------------------------------- wallets */
-.wallets { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.wallets { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 .wallet {
   display: flex; align-items: center; gap: 12px;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
@@ -131,7 +131,14 @@ main { max-width: 760px; margin: 0 auto; padding: 0 18px; }
   font-size: clamp(1.02rem, 4.4vw, 1.22rem); font-weight: 750; white-space: nowrap;
   font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
 }
-.wallet-value.negative { color: var(--out); }
+.wallet-value.negative, .wallet-value.out { color: var(--out); }
+.card-wallet { border-style: dashed; }
+.card.danger summary, #opening-card summary, #card-settle summary {
+  cursor: pointer; font-weight: 650; color: var(--ink-soft);
+  display: flex; align-items: center; gap: 8px;
+}
+#opening-card[open] summary, #card-settle[open] summary { margin-bottom: 10px; }
+#card-settle .form, #opening-card .form { margin-top: 12px; }
 
 /* ---------------------------------------------------------------- cards */
 .card {

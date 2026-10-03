@@ -10,7 +10,9 @@ import {
   monthKey,
   monthLabel,
   summarize,
+  validateCardPayment,
   validateEntry,
+  validateOpening,
 } from "../worker/summary.js";
 
 test("month keys, labels and shifts", () => {
@@ -64,18 +66,65 @@ test("the dashboard reads as lines, biggest first", () => {
 });
 
 test("cash and bank balances count what went in and out of each", () => {
-  const held = accountBalances(
-    [{ account: "Bank", total: 9000 }, { account: "Cash in Hand", total: 500 }],
-    [{ method: "Cash", total: 200 }, { method: "Bank", total: 1500 }, { method: "Credit Card", total: 1000 }],
-  );
+  const held = accountBalances({
+    incomeRows: [{ account: "Bank", total: 9000 }, { account: "Cash in Hand", total: 500 }],
+    expenseRows: [{ method: "Cash", total: 200 }, { method: "Bank", total: 1500 }],
+  });
   assert.equal(held.balances["Cash in Hand"], 300);
   assert.equal(held.balances.Bank, 7500);
-  assert.equal(held.cardSpend, 1000);
   assert.equal(held.total, 7800);
 
   // Spending cash you never recorded receiving shows up as a negative, not a zero.
-  const short = accountBalances([], [{ method: "Cash", total: 120 }]);
+  const short = accountBalances({ expenseRows: [{ method: "Cash", total: 120 }] });
   assert.equal(short.balances["Cash in Hand"], -120);
+});
+
+test("an opening balance sits under every balance after it", () => {
+  const held = accountBalances({
+    incomeRows: [{ account: "Bank", total: 9000 }],
+    expenseRows: [{ method: "Cash", total: 600 }, { method: "Bank", total: 3500 }],
+    opening: { "Cash in Hand": 2000, Bank: 5000 },
+  });
+  assert.equal(held.balances["Cash in Hand"], 1400);
+  assert.equal(held.balances.Bank, 10500);
+
+  assert.deepEqual(validateOpening({ "Cash in Hand": "2000", Bank: "" }), { "Cash in Hand": 2000, Bank: 0 });
+  assert.deepEqual(validateOpening({}), { "Cash in Hand": 0, Bank: 0 });
+  assert.deepEqual(validateOpening({ Bank: -250 }).Bank, -250);
+  assert.throws(() => validateOpening({ Bank: "lots" }), /must be a number/);
+});
+
+test("a card charge is pending until the bank pays it", () => {
+  const charged = accountBalances({
+    incomeRows: [{ account: "Bank", total: 9000 }],
+    expenseRows: [{ method: "Credit Card", total: 1200 }],
+  });
+  // The bank is untouched by the charge; the card owes it.
+  assert.equal(charged.balances.Bank, 9000);
+  assert.deepEqual(charged.card, { charged: 1200, paid: 0, pending: 1200 });
+
+  const part = accountBalances({
+    incomeRows: [{ account: "Bank", total: 9000 }],
+    expenseRows: [{ method: "Credit Card", total: 1200 }],
+    cardPaid: 700,
+  });
+  assert.equal(part.balances.Bank, 8300);
+  assert.equal(part.card.pending, 500);
+
+  const settled = accountBalances({
+    incomeRows: [{ account: "Bank", total: 9000 }],
+    expenseRows: [{ method: "Credit Card", total: 1200 }],
+    cardPaid: 1200,
+  });
+  assert.equal(settled.balances.Bank, 7800);
+  assert.equal(settled.card.pending, 0);
+});
+
+test("a card payment cannot exceed what is pending", () => {
+  assert.equal(validateCardPayment({ date: "2026-10-20", amount: "700" }, 700).amount, 700);
+  assert.throws(() => validateCardPayment({ date: "2026-10-20", amount: 800 }, 700), /Only 700 is pending/);
+  assert.throws(() => validateCardPayment({ date: "2026-10-20", amount: 0 }, 700), /greater than zero/);
+  assert.throws(() => validateCardPayment({ date: "nope", amount: 10 }, 700), /real date/);
 });
 
 test("an empty month reports no entries", () => {

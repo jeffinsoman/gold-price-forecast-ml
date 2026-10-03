@@ -382,11 +382,38 @@ async function loadMonth(month) {
     : "Nothing recorded yet. Add some income or an expense to start the month.";
 
   // Wallets: what is actually there, counting every month up to this one.
-  setAmount($("wallet-cash"), data.accounts.balances["Cash in Hand"]);
-  setAmount($("wallet-bank"), data.accounts.balances.Bank);
-  $("wallet-note").textContent = data.accounts.cardSpend
-    ? `Running totals to the end of ${shortMonth(month)} · ${money(data.accounts.cardSpend)} charged to the credit card`
-    : `Running totals to the end of ${shortMonth(month)}`;
+  const accounts = data.accounts;
+  setAmount($("wallet-cash"), accounts.balances["Cash in Hand"]);
+  setAmount($("wallet-bank"), accounts.balances.Bank);
+
+  // The card is a bill, not an account: charges sit pending until the bank pays them.
+  const card = accounts.card;
+  setAmount($("wallet-card"), card.pending);
+  $("wallet-card-sub").textContent = card.charged
+    ? `${money(card.charged)} charged · ${money(card.paid)} paid`
+    : "nothing charged yet";
+  $("card-wallet").hidden = card.charged === 0 && card.pending === 0;
+
+  const settle = $("card-settle");
+  settle.hidden = card.pendingAllTime <= 0;
+  $("card-form").amount.max = card.pendingAllTime;
+  $("card-form").amount.placeholder = Math.round(card.pendingAllTime);
+  $("card-payments").replaceChildren(
+    ...(data.cardPayments.length
+      ? data.cardPayments.map(cardPaymentRow)
+      : [empty("No card payments in this month.")]),
+  );
+
+  const opening = accounts.opening ?? {};
+  const openingForm = $("opening-form");
+  openingForm.elements["Cash in Hand"].value = opening["Cash in Hand"] || "";
+  openingForm.elements.Bank.value = opening.Bank || "";
+
+  const started = (opening["Cash in Hand"] || 0) + (opening.Bank || 0);
+  $("wallet-note").textContent =
+    `Running totals to the end of ${shortMonth(month)}` +
+    (started ? ` · ${money(started)} opening balance included` : "") +
+    (card.pending > 0 ? ` · the card bill is paid from the bank` : "");
 
   // Dashboard lines.
   drawLines($("dash-income"), data.incomeLines, "in", "No income this month yet.");
@@ -410,6 +437,31 @@ async function loadMonth(month) {
   );
 
   drawFriends(data.friends ?? []);
+}
+
+function cardPaymentRow(row) {
+  const item = document.createElement("div");
+  item.className = "entry";
+  item.innerHTML =
+    `<span class="line-icon" aria-hidden="true">💳</span>` +
+    `<div class="entry-main"><p class="entry-title">Card payment</p>` +
+    `<p class="entry-sub">${dayLabel(row.date)} · from 🏦 Bank${row.note ? ` · ${row.note}` : ""}</p></div>`;
+
+  const right = document.createElement("div");
+  right.className = "entry-right";
+  right.innerHTML = `<span class="entry-amount">${money(row.amount)}</span>`;
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "link danger";
+  remove.textContent = "Delete";
+  remove.addEventListener("click", async () => {
+    await api(`/card-payments/${row.id}`, { method: "DELETE" });
+    toast("Card payment removed.");
+    await loadMonth(state.month);
+  });
+  right.append(remove);
+  item.append(right);
+  return item;
 }
 
 // -------------------------------------------------------------------
@@ -444,6 +496,52 @@ function bindEntryForm(kind) {
       message($(`${kind}-msg`), error.message, false);
     }
   });
+}
+
+function bindOpeningForm() {
+  const form = $("opening-form");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const body = Object.fromEntries(new FormData(form).entries());
+    try {
+      const result = await api("/opening", { method: "PUT", body: JSON.stringify(body) });
+      const text = `Opening balance saved: ${money(result.opening["Cash in Hand"])} cash, ${money(result.opening.Bank)} bank.`;
+      message($("opening-msg"), text);
+      toast(text);
+      await loadMonth(state.month);
+    } catch (error) {
+      message($("opening-msg"), error.message, false);
+    }
+  });
+}
+
+function bindCardForm() {
+  const form = $("card-form");
+  form.date.value = state.today;
+
+  const send = async (amount) => {
+    try {
+      const result = await api("/card-payments", {
+        method: "POST",
+        body: JSON.stringify({ amount, date: form.date.value, note: form.note.value }),
+      });
+      const left = result.accounts.card.pendingAllTime;
+      const text = `💳 Paid ${money(result.payment.amount)} off the card from the bank.`;
+      message($("card-msg"), `${text} ${left > 0 ? `${money(left)} still pending.` : "Nothing pending now."}`);
+      toast(text);
+      form.reset();
+      form.date.value = state.today;
+      await loadMonth(state.month);
+    } catch (error) {
+      message($("card-msg"), error.message, false);
+    }
+  };
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    send(form.amount.value);
+  });
+  $("card-full").addEventListener("click", () => send(Number(form.amount.max)));
 }
 
 /** Two taps to wipe the tracker, never one. */
@@ -526,6 +624,8 @@ async function boot() {
     bindEditDialog();
     bindEntryForm("income");
     bindEntryForm("expense");
+    bindOpeningForm();
+    bindCardForm();
     bindReset();
     $("month-picker").addEventListener("change", (event) => loadMonth(event.target.value));
   }

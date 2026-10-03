@@ -173,25 +173,81 @@ export function lines(rows) {
 }
 
 /**
- * What is actually in each account, counting everything up to the end of
- * `month`: money received into it, less money paid from it. The credit card is
- * a bill rather than an account, so it is reported on its own.
+ * What is actually in each account at a point in time.
+ *
+ *   cash = opening cash + income received in cash - expenses paid in cash
+ *   bank = opening bank + income received in bank - expenses paid from bank
+ *                       - whatever has been paid off the credit card
+ *
+ * A credit card is not an account you hold money in: charging it owes the card,
+ * and that bill is settled from the bank later. So card spending is kept apart
+ * as `card.pending` until it is paid.
  */
-export function accountBalances(incomeRows = [], expenseRows = []) {
-  const balances = Object.fromEntries(INCOME_ACCOUNTS.map((account) => [account, 0]));
+export function accountBalances({
+  incomeRows = [],
+  expenseRows = [],
+  opening = {},
+  cardPaid = 0,
+} = {}) {
+  const balances = Object.fromEntries(
+    INCOME_ACCOUNTS.map((account) => [account, Math.round((Number(opening[account]) || 0) * 100) / 100]),
+  );
+
+  let charged = 0;
   for (const row of incomeRows) {
     if (row.account in balances) balances[row.account] += Number(row.total ?? row.amount) || 0;
   }
-
-  let cardSpend = 0;
   for (const row of expenseRows) {
     const amount = Number(row.total ?? row.amount) || 0;
     if (row.method === "Cash") balances["Cash in Hand"] -= amount;
     else if (row.method === "Bank") balances.Bank -= amount;
-    else cardSpend += amount;
+    else charged += amount;
   }
 
-  return { balances, cardSpend, total: Object.values(balances).reduce((sum, value) => sum + value, 0) };
+  const paid = Math.round((Number(cardPaid) || 0) * 100) / 100;
+  balances.Bank -= paid;
+
+  const round = (value) => Math.round(value * 100) / 100;
+  for (const account of Object.keys(balances)) balances[account] = round(balances[account]);
+
+  return {
+    balances,
+    card: { charged: round(charged), paid, pending: round(charged - paid) },
+    total: round(Object.values(balances).reduce((sum, value) => sum + value, 0)),
+  };
+}
+
+/** An opening balance is a plain number per account, and may be negative. */
+export function validateOpening(body) {
+  const opening = {};
+  for (const account of INCOME_ACCOUNTS) {
+    const raw = body?.[account];
+    const amount = raw === "" || raw === null || raw === undefined ? 0 : Number(raw);
+    if (!Number.isFinite(amount)) throw new Error(`Opening balance for ${account} must be a number.`);
+    opening[account] = Math.round(amount * 100) / 100;
+  }
+  return opening;
+}
+
+/** A payment off the credit card: money leaving the bank to settle the bill. */
+export function validateCardPayment(body, pending) {
+  const date = String(body?.date ?? "").trim();
+  if (!isIsoDate(date)) throw new Error("Date must be a real date in YYYY-MM-DD format.");
+
+  const amount = Number(body?.amount);
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Amount must be greater than zero.");
+
+  const rounded = Math.round(amount * 100) / 100;
+  if (pending !== undefined && rounded > Math.round(pending * 100) / 100 + 0.001) {
+    throw new Error(`Only ${pending.toLocaleString("en-US")} is pending on the card.`);
+  }
+
+  return {
+    date,
+    month: monthKey(date),
+    amount: rounded,
+    note: String(body?.note ?? "").trim().slice(0, 200),
+  };
 }
 
 function format(value) {

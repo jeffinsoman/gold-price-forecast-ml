@@ -58,8 +58,33 @@
           <p class="wallet-value" id="wallet-bank">—</p>
         </div>
       </article>
+      <article class="wallet card-wallet" id="card-wallet">
+        <span class="wallet-icon" aria-hidden="true">💳</span>
+        <div>
+          <p class="wallet-label">Credit card pending</p>
+          <p class="wallet-value out" id="wallet-card">—</p>
+          <p class="line-sub" id="wallet-card-sub"></p>
+        </div>
+      </article>
     </div>
     <p class="muted tiny" id="wallet-note"></p>
+
+    <details class="card" id="card-settle" hidden>
+      <summary><span aria-hidden="true">💳</span> Pay the card from the bank</summary>
+      <form id="card-form" class="form">
+        <div class="grid">
+          <label class="field">Amount <input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" required /></label>
+          <label class="field">Date <input type="date" name="date" required /></label>
+        </div>
+        <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
+        <div class="row">
+          <button class="btn primary" type="submit">Record payment</button>
+          <button class="btn ghost" type="button" id="card-full">Pay it all</button>
+        </div>
+        <p class="form-msg" id="card-msg"></p>
+      </form>
+      <div id="card-payments"></div>
+    </details>
 
     <section class="card">
       <header class="card-head">
@@ -84,6 +109,19 @@
       </header>
       <p class="muted tiny" id="dash-balance-note"></p>
     </section>
+
+    <details class="card" id="opening-card">
+      <summary><span aria-hidden="true">🏁</span> Opening balance</summary>
+      <p class="muted tiny">What was already in each account before you started here. It sits under every balance from then on.</p>
+      <form id="opening-form" class="form">
+        <div class="grid">
+          <label class="field">💵 Cash in hand <input type="number" name="Cash in Hand" step="0.01" inputmode="decimal" placeholder="0" /></label>
+          <label class="field">🏦 Bank <input type="number" name="Bank" step="0.01" inputmode="decimal" placeholder="0" /></label>
+        </div>
+        <button class="btn primary" type="submit">Save opening balance</button>
+        <p class="form-msg" id="opening-msg"></p>
+      </form>
+    </details>
 
     <details class="card danger">
       <summary>Start over</summary>

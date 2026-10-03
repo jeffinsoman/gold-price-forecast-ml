@@ -6,6 +6,7 @@ import {
   EXPENSE_METHODS,
   INCOME_ACCOUNTS,
   INCOME_CATEGORIES,
+  INCOME_ACCOUNTS as ACCOUNTS,
   accountBalances,
   addMonths,
   friendTotals,
@@ -13,7 +14,9 @@ import {
   monthKey,
   summarize,
   today,
+  validateCardPayment,
   validateEntry,
+  validateOpening,
 } from "./summary.js";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
@@ -54,8 +57,27 @@ function ensureSchema(db) {
         // Already there.
       }
     }
+    await db.batch([
+      db.prepare("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)"),
+      db.prepare(
+        "CREATE TABLE IF NOT EXISTS card_payment (id INTEGER PRIMARY KEY AUTOINCREMENT," +
+          " date TEXT NOT NULL, month TEXT NOT NULL, amount REAL NOT NULL CHECK (amount > 0)," +
+          " note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+      ),
+    ]);
   })();
   return schemaReady;
+}
+
+/** What each account held before the first entry was ever written. */
+async function openingBalances(db) {
+  const { results } = await db.prepare("SELECT key, value FROM settings WHERE key LIKE 'opening:%'").all();
+  const opening = Object.fromEntries(ACCOUNTS.map((account) => [account, 0]));
+  for (const row of results) {
+    const account = row.key.slice("opening:".length);
+    if (account in opening) opening[account] = Number(row.value) || 0;
+  }
+  return opening;
 }
 
 // -------------------------------------------------------------------
@@ -63,11 +85,33 @@ function ensureSchema(db) {
 // -------------------------------------------------------------------
 /** What sits in each account at the end of `month`, counting from the beginning. */
 async function held(db, month) {
-  const [income, expense] = await db.batch([
+  const [income, expense, card] = await db.batch([
     db.prepare("SELECT account, SUM(amount) AS total FROM income WHERE month <= ?1 GROUP BY account").bind(month),
     db.prepare("SELECT method, SUM(amount) AS total FROM expense WHERE month <= ?1 GROUP BY method").bind(month),
+    db.prepare("SELECT COALESCE(SUM(amount), 0) AS paid FROM card_payment WHERE month <= ?1").bind(month),
   ]);
-  return accountBalances(income.results, expense.results);
+
+  const opening = await openingBalances(db);
+  return {
+    ...accountBalances({
+      incomeRows: income.results,
+      expenseRows: expense.results,
+      opening,
+      cardPaid: Number(card.results[0]?.paid) || 0,
+    }),
+    opening,
+  };
+}
+
+/** Everything still owed on the card, across every month. */
+async function cardPending(db) {
+  const row = await db
+    .prepare(
+      "SELECT COALESCE((SELECT SUM(amount) FROM expense WHERE method = 'Credit Card'), 0)" +
+        " - COALESCE((SELECT SUM(amount) FROM card_payment), 0) AS pending",
+    )
+    .first();
+  return Math.round((Number(row?.pending) || 0) * 100) / 100;
 }
 
 /** Everything tagged with a name, netted per friend, across every month. */
@@ -80,11 +124,13 @@ async function friends(db) {
 }
 
 async function monthData(db, month) {
-  const [income, expense, accounts, withFriends] = await Promise.all([
+  const [income, expense, accounts, withFriends, payments, pending] = await Promise.all([
     db.prepare("SELECT * FROM income WHERE month = ?1 ORDER BY date DESC, id DESC").bind(month).all(),
     db.prepare("SELECT * FROM expense WHERE month = ?1 ORDER BY date DESC, id DESC").bind(month).all(),
     held(db, month),
     friends(db),
+    db.prepare("SELECT * FROM card_payment WHERE month = ?1 ORDER BY date DESC, id DESC").bind(month).all(),
+    cardPending(db),
   ]);
 
   const total = (rows) => rows.reduce((sum, row) => sum + Number(row.amount), 0);
@@ -99,7 +145,8 @@ async function monthData(db, month) {
     expenses: expense.results,
     incomeLines: lines(income.results),
     expenseLines: lines(expense.results),
-    accounts,
+    accounts: { ...accounts, card: { ...accounts.card, pendingAllTime: pending } },
+    cardPayments: payments.results,
     friends: withFriends,
   };
 }
@@ -187,6 +234,45 @@ async function handleApi(request, env, url) {
     return json({ deleted: Number(id) });
   }
 
+  // GET|PUT /api/opening - what each account held before the tracker started.
+  if (method === "GET" && path === "opening") {
+    return json({ opening: await openingBalances(db) });
+  }
+
+  if (method === "PUT" && path === "opening") {
+    const opening = validateOpening(await readJson(request));
+    await db.batch(
+      Object.entries(opening).map(([account, amount]) =>
+        db
+          .prepare(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)" +
+              " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+          )
+          .bind(`opening:${account}`, String(amount)),
+      ),
+    );
+    return json({ opening, ...(await monthData(db, monthKey(today()))) });
+  }
+
+  // POST /api/card-payments - settle some of the card bill from the bank.
+  if (method === "POST" && path === "card-payments") {
+    const pending = await cardPending(db);
+    if (pending <= 0) return fail("Nothing is pending on the card.");
+    const row = validateCardPayment(await readJson(request), pending);
+    const result = await db
+      .prepare("INSERT INTO card_payment (date, month, amount, note) VALUES (?1, ?2, ?3, ?4)")
+      .bind(row.date, row.month, row.amount, row.note)
+      .run();
+    return json({ id: result.meta.last_row_id, payment: row, ...(await monthData(db, row.month)) }, 201);
+  }
+
+  const payment = path.match(/^card-payments\/(\d+)$/);
+  if (method === "DELETE" && payment) {
+    const result = await db.prepare("DELETE FROM card_payment WHERE id = ?1").bind(Number(payment[1])).run();
+    if (!result.meta.changes) return fail("That payment no longer exists.", 404);
+    return json({ deleted: Number(payment[1]) });
+  }
+
   // POST /api/reset - empties the tracker. Needs the word RESET to go through.
   if (method === "POST" && path === "reset") {
     const body = await readJson(request);
@@ -196,7 +282,17 @@ async function handleApi(request, env, url) {
 
     // Tables from older versions of the app may or may not be there.
     let cleared = 0;
-    for (const table of ["income", "expense", "budget", "loan_repayment", "loan", "recurring_run", "recurring"]) {
+    for (const table of [
+      "income",
+      "expense",
+      "card_payment",
+      "settings",
+      "budget",
+      "loan_repayment",
+      "loan",
+      "recurring_run",
+      "recurring",
+    ]) {
       try {
         const result = await db.prepare(`DELETE FROM ${table}`).run();
         cleared += result.meta.changes ?? 0;
@@ -221,7 +317,7 @@ export default {
       return await handleApi(request, env, url);
     } catch (error) {
       const message = error?.message ?? "Something went wrong.";
-      const known = /must be|cannot be|no longer|JSON/i.test(message);
+      const known = /must be|cannot be|no longer|JSON|pending|number/i.test(message);
       return fail(message, known ? 400 : 500);
     }
   },

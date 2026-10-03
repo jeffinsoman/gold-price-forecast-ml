@@ -81,8 +81,11 @@ npm run deploy   # publishes to the Worker
 Pushing to `main` deploys automatically through Workers Builds.
 
 ### 🏠 Dashboard
-* **Cash in hand** and **Bank**, counted from every entry up to the end of the month shown. Credit
-  card spending is reported separately, because a card is a bill rather than an account.
+* **Cash in hand** and **Bank**, counted from every entry up to the end of the month shown, on top of
+  the **opening balance** you set once for each account.
+* **Credit card pending** — charging the card does not move money out of the bank. It sits as pending
+  until you settle it: *Pay the card from the bank* takes the whole bill or part of it, and only then
+  does the bank balance drop. The month's expense still counts on the day it was charged.
 * **Income** and **Expense**, each as a short list of lines — one per category, biggest first, with a
   bar for its share.
 * **Balance** — `income − expense`, and nothing else. Each month stands on its own; next month starts
@@ -106,6 +109,10 @@ surface): light `#0ea47f / #e2563f / #5b5bd6` at ΔE 9.2 deutan, dark `#10a683 /
 and an icon. Amounts are tabular-figure, the tab bar sits under the thumb on a phone and at the top
 on a wide screen, and motion respects `prefers-reduced-motion`.
 
+### Opening balance
+What each account held before you started tracking. Set it once under **Opening balance** on the
+dashboard and it sits beneath every balance from then on. It may be negative.
+
 ### Start over
 At the foot of the Dashboard: deletes every entry in every month, two taps, no undo.
 
@@ -125,4 +132,7 @@ At the foot of the Dashboard: deletes every entry in every month, two taps, no u
 | GET | `/api/month/:month` | Summary, lines, account balances, entries and friends |
 | POST | `/api/income` · `/api/expense` | `{ date, amount, account \| method, category, friend, note }` |
 | PATCH · DELETE | `/api/income/:id` · `/api/expense/:id` | Edit or remove an entry |
+| GET · PUT | `/api/opening` | The opening balance per account |
+| POST | `/api/card-payments` | `{ date, amount, note }` — settles the card from the bank |
+| DELETE | `/api/card-payments/:id` | Undo a card payment |
 | POST | `/api/reset` | `{ "confirm": "RESET" }` — empties the tracker |
