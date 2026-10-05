@@ -37,6 +37,19 @@ export function tpPoints(profit, lot) {
   return Math.ceil(round(profit / (lot * (AED_PER_LOT_100PTS / 100)), 6));
 }
 
+/**
+ * Points a trade moved in its favour (negative when against it). From the
+ * prices when given, otherwise worked back from the P&L and lot.
+ */
+export function tradePoints({ direction, lot, entry, exit, pnl }) {
+  if (entry != null && exit != null && entry !== "" && exit !== "") {
+    const move = direction === "Sell" ? Number(entry) - Number(exit) : Number(exit) - Number(entry);
+    return Math.round(move * 100);
+  }
+  if (!(Number(lot) > 0)) return 0;
+  return Math.round(Number(pnl) / (Number(lot) * (AED_PER_LOT_100PTS / 100)));
+}
+
 export function lotFor(profit) {
   return round(Math.max(0, profit) / AED_PER_LOT_100PTS, 4);
 }
@@ -130,9 +143,12 @@ export function challengeState({ trades, startBalance = GOLD_START, startDate, t
   const rate = dailyRate(startBalance);
   const byDay = new Map();
   for (const trade of trades) {
-    const entry = byDay.get(trade.day) ?? { pnl: 0, count: 0 };
+    const entry = byDay.get(trade.day) ?? { pnl: 0, count: 0, lots: [], lot: 0, points: 0 };
     entry.pnl += Number(trade.pnl) || 0;
     entry.count += 1;
+    entry.lots.push(Number(trade.lot));
+    entry.lot += Number(trade.lot) || 0;
+    entry.points += tradePoints(trade);
     byDay.set(trade.day, entry);
   }
 
@@ -169,6 +185,11 @@ export function challengeState({ trades, startBalance = GOLD_START, startDate, t
       tpPoints: tpPoints(targetProfit, tradeLot(targetProfit)),
       pnl: traded ? round(traded.pnl) : null,
       trades: traded?.count ?? 0,
+      // What was actually traded: the lots placed, the points the price moved
+      // in your favour, and the points that lot needed to reach the target.
+      lotsUsed: traded ? traded.lots : [],
+      pointsMade: traded ? traded.points : null,
+      targetPoints: traded ? tpPoints(targetProfit, traded.lot / traded.count) : null,
       balance: round(balance),
       status,
     };

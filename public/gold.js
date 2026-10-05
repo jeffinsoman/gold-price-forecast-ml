@@ -47,6 +47,15 @@ function toast(text, kind = "ok") {
   }, 2600);
 }
 
+/** Points a trade moved in its favour; mirrors tradePoints in worker/gold.js. */
+function tradePoints({ direction, lot, entry, exit, pnl }) {
+  if (entry != null && exit != null && entry !== "" && exit !== "") {
+    const move = direction === "Sell" ? Number(entry) - Number(exit) : Number(exit) - Number(entry);
+    return Math.round(move * 100);
+  }
+  return Number(lot) > 0 ? Math.round(Number(pnl) / (Number(lot) * 3.67)) : 0;
+}
+
 // ------------------------------------------------------------- rendering
 function render(data) {
   state.data = data;
@@ -154,7 +163,9 @@ function renderTrades(data) {
   for (const trade of data.trades) {
     const row = document.createElement("div");
     row.className = "entry";
-    const prices = trade.entry != null && trade.exit != null ? ` · ${trade.entry} → ${trade.exit}` : "";
+    const pts = tradePoints(trade);
+    const prices = (trade.entry != null && trade.exit != null ? ` · ${trade.entry} → ${trade.exit}` : "") +
+      ` · ${pts > 0 ? "+" : ""}${pts} pts`;
     row.innerHTML = `
       <span class="entry-icon" aria-hidden="true">${trade.direction === "Sell" ? "⬇️" : "⬆️"}</span>
       <div class="entry-main">
@@ -190,6 +201,9 @@ function renderPlan(data) {
       <td class="${row.targetProfit < row.profit ? "num in" : ""}">${row.targetProfit.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
       <td class="${row.targetLot < row.lot ? "num in" : ""}" title="exact ${row.targetLot.toFixed(4)}">${row.tradeLot.toFixed(2)}</td>
       <td>${row.tpPoints || "—"}</td>
+      <td>${traded ? row.lotsUsed.map((lot) => lot.toFixed(2)).join(" + ") : "—"}</td>
+      <td class="num ${traded ? tone(row.pointsMade) : ""}">${traded ? `${row.pointsMade > 0 ? "+" : ""}${row.pointsMade}` : "—"}</td>
+      <td>${traded ? (row.targetPoints ? `${row.targetPoints}${row.pointsMade >= row.targetPoints ? " ✅" : ""}` : "✅") : "—"}</td>
       <td class="num ${traded ? tone(row.pnl) : ""}">${traded ? money(row.pnl, { sign: true }).replace("AED ", "") : "—"}</td>
       <td>${row.day <= data.currentDay ? row.balance.toLocaleString("en-US", { minimumFractionDigits: 2 }) : "—"}</td>
       <td><span class="status-tag ${row.status}" title="${STATUS[row.status].split(" ").slice(1).join(" ")}">${STATUS[row.status].split(" ")[0]}</span></td>`;
@@ -300,6 +314,7 @@ function previewOpening() {
 
 function setPage(page) {
   state.page = page;
+  document.body.classList.toggle("wide", page === "plan");
   for (const tab of document.querySelectorAll(".tab")) tab.classList.toggle("is-active", tab.dataset.page === page);
   for (const section of document.querySelectorAll(".page")) section.classList.toggle("hidden", section.id !== `page-${page}`);
   if (page === "plan") document.querySelector("#plan-body tr.current")?.scrollIntoView({ block: "center" });

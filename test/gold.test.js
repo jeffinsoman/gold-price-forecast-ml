@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildPlan, tradeLot, tpPoints, challengeDay, challengeState, dailyRate, lotFor, tradePnl, validateGoldSettings, validateTrade } from "../worker/gold.js";
+import { buildPlan, tradeLot, tpPoints, tradePoints, challengeDay, challengeState, dailyRate, lotFor, tradePnl, validateGoldSettings, validateTrade } from "../worker/gold.js";
 
 test("the plan matches the PDF table", () => {
   const plan = buildPlan();
@@ -97,4 +97,19 @@ test("lots are rounded up to Deriv's 0.01 steps, never below 0.01", () => {
     const lot = tradeLot(row.profit);
     assert.ok(lot >= 0.01 && lot * 367 + 1e-9 >= row.profit, `day ${row.day}`);
   }
+});
+
+test("each day records the lot used, points made and points the target needed", () => {
+  // The first real trade: sell 0.01 lot from 4137.84 to 4129.19 for AED 31.77.
+  const trade = { day: 1, direction: "Sell", lot: 0.01, entry: 4137.84, exit: 4129.19, pnl: 31.77 };
+  assert.equal(tradePoints(trade), 865);
+  assert.equal(tradePoints({ direction: "Buy", lot: 0.04, pnl: 14.68 }), 100);
+  const s = challengeState({ trades: [trade], startBalance: 117.52, startDate: "2026-10-05", today: "2026-10-05" });
+  const day1 = s.days[0];
+  assert.deepEqual(day1.lotsUsed, [0.01]);
+  assert.equal(day1.pointsMade, 865);
+  assert.equal(day1.targetPoints, tpPoints(day1.targetProfit, 0.01));
+  assert.ok(day1.pointsMade >= day1.targetPoints);
+  assert.equal(day1.status, "hit");
+  assert.equal(s.days[1].pointsMade, null);
 });

@@ -106,3 +106,5 @@
 }
 .opening-preview:empty { display: none; }
 .kpi-sub { font-size: 0.74rem; color: var(--ink-faint); font-variant-numeric: tabular-nums; }
+/* The plan table has many columns: give it the room on a wide screen. */
+.gold.wide main { max-width: 1240px; }
