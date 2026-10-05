@@ -17,6 +17,26 @@ export function dailyRate(start = GOLD_START, goal = GOLD_GOAL, days = GOLD_DAYS
 }
 
 /** Lot size that makes `profit` AED from a single 100-point move. */
+/** Deriv trades gold in 0.01 lot steps, from 0.01 up. */
+export const MIN_LOT = 0.01;
+
+/**
+ * The lot to actually place for `profit`: rounded UP to a 0.01 step and never
+ * below 0.01, so one 100-point move always reaches the target.
+ */
+export function tradeLot(profit) {
+  if (!(profit > 0)) return 0;
+  const steps = Math.ceil(round(profit / AED_PER_LOT_100PTS / MIN_LOT, 6));
+  return round(Math.max(1, steps) * MIN_LOT);
+}
+
+/** Points the price must move at `lot` to make `profit` (the take-profit distance). */
+export function tpPoints(profit, lot) {
+  if (!(profit > 0) || !(lot > 0)) return 0;
+  // 1 point at 1.00 lot = AED 3.67.
+  return Math.ceil(round(profit / (lot * (AED_PER_LOT_100PTS / 100)), 6));
+}
+
 export function lotFor(profit) {
   return round(Math.max(0, profit) / AED_PER_LOT_100PTS, 4);
 }
@@ -97,6 +117,7 @@ export function validateGoldSettings(body) {
   if (!isIsoDate(body?.startDate)) throw new Error("Start date must look like 2026-10-03.");
   const startBalance = number(body.startBalance ?? GOLD_START, "Starting balance");
   if (startBalance <= 0) throw new Error("Starting balance must be more than 0.");
+  if (startBalance >= GOLD_GOAL) throw new Error(`Starting balance must be below AED ${GOLD_GOAL.toLocaleString("en-US")}.`);
   return { startDate: body.startDate, startBalance: round(startBalance) };
 }
 
@@ -144,6 +165,8 @@ export function challengeState({ trades, startBalance = GOLD_START, startDate, t
       carry: round(open - row.start),
       targetProfit,
       targetLot: targetProfit === row.profit ? row.lot : lotFor(targetProfit),
+      tradeLot: tradeLot(targetProfit),
+      tpPoints: tpPoints(targetProfit, tradeLot(targetProfit)),
       pnl: traded ? round(traded.pnl) : null,
       trades: traded?.count ?? 0,
       balance: round(balance),
@@ -176,18 +199,29 @@ export function challengeState({ trades, startBalance = GOLD_START, startDate, t
     logProgress: current <= startBalance ? 0 : Math.min(1, Math.log(current / startBalance) / Math.log(GOLD_GOAL / startBalance)),
     currentDay,
     onPlanDay,
-    daysAhead: onPlanDay - currentDay,
+    // Today only counts once its target is reached; until then the yardstick is yesterday's.
+    daysAhead: onPlanDay - (current >= today_.target ? currentDay : currentDay - 1),
     today: {
       ...today_,
       pnl: todayPnl,
       openToday,
       needed,
       neededLot: lotFor(needed),
+      neededTradeLot: tradeLot(needed),
+      neededTp: tpPoints(needed, tradeLot(needed)),
       paceProfit,
       paceLot: lotFor(paceProfit),
       hit: current >= today_.target,
     },
-    next: next && { day: next.day, targetProfit: next.targetProfit, targetLot: next.targetLot, profit: next.profit, lot: next.lot },
+    next: next && {
+      day: next.day,
+      targetProfit: next.targetProfit,
+      targetLot: next.targetLot,
+      tradeLot: next.tradeLot,
+      tpPoints: next.tpPoints,
+      profit: next.profit,
+      lot: next.lot,
+    },
     stats: {
       trades: trades.length,
       wins,

@@ -59,6 +59,9 @@ function render(data) {
 function renderToday(data) {
   const { today, stats } = data;
   $("day-title").textContent = `Day ${data.currentDay} of 100`;
+  $("warn-growth").textContent =
+    `${money(data.startBalance)} → AED 100,000 is a ${Math.round(data.goal / data.startBalance).toLocaleString("en-US")}× increase.`;
+  $("eyebrow").textContent = `XAUUSD · Deriv · ${money(data.startBalance).replace(".00", "")} → AED 100,000`;
   $("balance").textContent = money(data.balance);
   $("balance-sum").textContent = `Started with ${money(data.startBalance)} · P&L ${money(data.totalPnl, { sign: true })}`;
   $("goal-fill").style.width = `${(data.logProgress * 100).toFixed(1)}%`;
@@ -85,7 +88,8 @@ function renderToday(data) {
   $("today-status").textContent = today.hit ? STATUS[status] : today.pnl ? STATUS[status] : "⏳ Not traded yet";
   $("today-status").className = `status-tag ${status}`;
   $("k-needed").textContent = today.hit ? "Done ✅" : money(today.needed);
-  $("k-lot").textContent = today.hit ? "—" : today.neededLot.toFixed(2);
+  $("k-lot").textContent = today.hit ? "—" : today.neededTradeLot.toFixed(2);
+  $("k-tp").textContent = today.hit ? "" : `TP ≈ ${today.neededTp} pts (exact ${today.neededLot.toFixed(4)})`;
   $("k-target").textContent = money(today.target);
   $("k-today").textContent = money(today.pnl, { sign: true });
   $("k-today").className = `kpi-value ${tone(today.pnl)}`;
@@ -102,8 +106,8 @@ function renderToday(data) {
       ? `Day${skip > 1 ? "s" : ""} ${data.currentDay + 1}${skip > 1 ? `–${next.day - 1}` : ""} covered ✅<br>`
       : "";
     $("next-day").innerHTML =
-      `${covered}<b>Next: Day ${next.day}</b> · target ${money(next.targetProfit)} · lot ${next.targetLot.toFixed(4)}` +
-      (cut ? ` <span class="was">PDF ${money(next.profit)} · ${next.lot.toFixed(4)}</span>` : "");
+      `${covered}<b>Next: Day ${next.day}</b> · target ${money(next.targetProfit)} · lot <b>${next.tradeLot.toFixed(2)}</b> · TP ≈ ${next.tpPoints} pts` +
+      (cut ? ` <span class="was">plan ${money(next.profit)} · ${next.lot.toFixed(4)}</span>` : "");
   }
 
   $("s-pnl").textContent = money(data.totalPnl, { sign: true });
@@ -117,11 +121,12 @@ function renderToday(data) {
   form.startDate.value = data.startDate;
   form.startBalance.value = data.startBalance;
   if (!data.started) $("setup-card").open = true;
+  previewOpening();
 }
 
 /** Why today's target differs from the PDF: profit carried in, or a gap to catch up. */
 function adjustNote(today, balance) {
-  const pdf = `PDF plan for Day ${today.day}: ${money(today.profit)} at ${today.lot.toFixed(4)} lot.`;
+  const pdf = `Plan for Day ${today.day}: ${money(today.profit)} at ${today.lot.toFixed(4)} lot.`;
   const extra = balance - today.target;
   if (today.trades && extra > 0.004) {
     return `${pdf} Target beaten by ${money(extra)}, which carries forward and cuts the next day's target and lot.`;
@@ -129,7 +134,7 @@ function adjustNote(today, balance) {
   if (today.carry > 0.004) {
     return today.targetProfit === 0
       ? `${pdf} Your extra ${money(today.carry)} from earlier days already covers it, so no trade is needed today.`
-      : `${pdf} Your extra ${money(today.carry)} from earlier days cuts it to ${money(today.targetProfit)} at ${today.targetLot.toFixed(4)} lot.`;
+      : `${pdf} Your extra ${money(today.carry)} from earlier days cuts it to ${money(today.targetProfit)} (${today.tradeLot.toFixed(2)} lot).`;
   }
   if (today.carry < -0.004) {
     return `${pdf} You started the day ${money(-today.carry)} behind, so today's target is ${money(today.targetProfit)} to get back on plan.`;
@@ -183,7 +188,8 @@ function renderPlan(data) {
       <td>${row.target.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
       <td>${row.lot.toFixed(4)}</td>
       <td class="${row.targetProfit < row.profit ? "num in" : ""}">${row.targetProfit.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-      <td class="${row.targetLot < row.lot ? "num in" : ""}">${row.targetLot.toFixed(4)}</td>
+      <td class="${row.targetLot < row.lot ? "num in" : ""}" title="exact ${row.targetLot.toFixed(4)}">${row.tradeLot.toFixed(2)}</td>
+      <td>${row.tpPoints || "—"}</td>
       <td class="num ${traded ? tone(row.pnl) : ""}">${traded ? money(row.pnl, { sign: true }).replace("AED ", "") : "—"}</td>
       <td>${row.day <= data.currentDay ? row.balance.toLocaleString("en-US", { minimumFractionDigits: 2 }) : "—"}</td>
       <td><span class="status-tag ${row.status}" title="${STATUS[row.status].split(" ").slice(1).join(" ")}">${STATUS[row.status].split(" ")[0]}</span></td>`;
@@ -278,6 +284,20 @@ function updatePnlHint() {
   }
 }
 
+/** What the plan becomes from the opening balance being typed, before it is saved. */
+function previewOpening() {
+  const opening = Number($("setup-form").startBalance.value);
+  const out = $("opening-preview");
+  if (!(opening > 0) || opening >= 100000) {
+    out.textContent = opening >= 100000 ? "Opening balance must be below AED 100,000." : "";
+    return;
+  }
+  const rate = (100000 / opening) ** (1 / 100) - 1;
+  const profit = opening * rate;
+  out.innerHTML =
+    `From ${money(opening)}: <b>${(rate * 100).toFixed(2)}% a day</b> · Day 1 target ${money(profit)} at <b>${(profit / 367).toFixed(4)} lot</b>`;
+}
+
 function setPage(page) {
   state.page = page;
   for (const tab of document.querySelectorAll(".tab")) tab.classList.toggle("is-active", tab.dataset.page === page);
@@ -291,6 +311,21 @@ function wire() {
     if (tab) setPage(tab.dataset.page);
   });
 
+  const setup = $("setup-form");
+  setup.startBalance.addEventListener("input", previewOpening);
+  $("opening-quick").addEventListener("click", (event) => {
+    const chip = event.target.closest("[data-amount]");
+    if (!chip) return;
+    setup.startBalance.value = chip.dataset.amount;
+    previewOpening();
+  });
+  $("edit-opening").addEventListener("click", () => {
+    setPage("today");
+    $("setup-card").open = true;
+    $("setup-card").scrollIntoView({ behavior: "smooth", block: "start" });
+    setup.startBalance.focus();
+  });
+
   $("setup-form").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.target;
@@ -301,7 +336,7 @@ function wire() {
       }));
       $("setup-card").open = false;
       resetTradeForm();
-      toast("Challenge start saved.");
+      toast(`Opening balance ${money(state.data.startBalance)} saved. Plan updated.`);
     } catch (error) {
       toast(error.message, "bad");
     }
@@ -312,8 +347,8 @@ function wire() {
   form.addEventListener("input", updatePnlHint);
   $("use-lot").addEventListener("click", () => {
     const t = state.data?.today;
-    const lot = t && (t.hit ? state.data.next?.targetLot : t.neededLot);
-    if (lot) form.lot.value = Math.max(0.01, Math.ceil(lot * 100) / 100).toFixed(2);
+    const lot = t && (t.hit ? state.data.next?.tradeLot : t.neededTradeLot);
+    if (lot) form.lot.value = lot.toFixed(2);
     updatePnlHint();
   });
   $("trade-cancel").addEventListener("click", resetTradeForm);

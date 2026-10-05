@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildPlan, challengeDay, challengeState, dailyRate, lotFor, tradePnl, validateTrade } from "../worker/gold.js";
+import { buildPlan, tradeLot, tpPoints, challengeDay, challengeState, dailyRate, lotFor, tradePnl, validateGoldSettings, validateTrade } from "../worker/gold.js";
 
 test("the plan matches the PDF table", () => {
   const plan = buildPlan();
@@ -45,7 +45,7 @@ test("state compares the balance with the plan", () => {
   assert.equal(s.days[1].status, "loss");
   assert.equal(s.today.needed, 16.47);
   assert.equal(s.onPlanDay, 0);
-  assert.equal(s.daysAhead, -2);
+  assert.equal(s.daysAhead, -1);
   assert.equal(s.stats.winRate, 0.5);
 });
 
@@ -60,7 +60,7 @@ test("profit over a target cuts the next days' targets and lots", () => {
   assert.equal(s.days[2].targetProfit, 10.99);
   assert.equal(s.days[2].targetLot, 0.0299);
   assert.equal(s.days[2].profit, 14.52);
-  assert.deepEqual(s.next, { day: 3, targetProfit: 10.99, targetLot: 0.0299, profit: 14.52, lot: 0.0396 });
+  assert.deepEqual(s.next, { day: 3, targetProfit: 10.99, targetLot: 0.0299, tradeLot: 0.03, tpPoints: 100, profit: 14.52, lot: 0.0396 });
   // Further out the plan is back to the PDF numbers.
   assert.equal(s.days[3].targetProfit, s.days[3].profit);
 });
@@ -71,4 +71,30 @@ test("today's target uses the balance the day opened with", () => {
   assert.equal(s.today.targetProfit, 6.47);
   assert.equal(s.today.carry, 7.18);
   assert.equal(s.today.needed, 6.47);
+});
+
+test("a custom opening balance re-plans the 100 days to AED 100,000", () => {
+  const plan = buildPlan(500);
+  assert.equal(plan[0].start, 500);
+  assert.equal(plan[99].target, 100000);
+  assert.ok(plan[0].profit < 12.82 * 2.5);
+  const s = challengeState({ trades: [], startBalance: 500, startDate: "2026-10-05", today: "2026-10-05" });
+  assert.equal(s.balance, 500);
+  assert.equal(s.today.targetProfit, plan[0].profit);
+  assert.throws(() => validateGoldSettings({ startDate: "2026-10-05", startBalance: 100000 }), /below/);
+  assert.deepEqual(validateGoldSettings({ startDate: "2026-10-05", startBalance: "350.5" }), { startDate: "2026-10-05", startBalance: 350.5 });
+});
+
+test("lots are rounded up to Deriv's 0.01 steps, never below 0.01", () => {
+  assert.equal(tradeLot(12.82), 0.04); // 0.0349 -> 0.04
+  assert.equal(tradeLot(1), 0.01); // tiny targets still trade 0.01
+  assert.equal(tradeLot(3.67), 0.01); // exactly 0.01, no extra step
+  assert.equal(tradeLot(0), 0);
+  // Day 1: 0.04 lot reaches AED 12.82 after 88 points (0.04 x 3.67 = 0.1468 a point).
+  assert.equal(tpPoints(12.82, 0.04), 88);
+  const plan = buildPlan();
+  for (const row of plan) {
+    const lot = tradeLot(row.profit);
+    assert.ok(lot >= 0.01 && lot * 367 + 1e-9 >= row.profit, `day ${row.day}`);
+  }
 });

@@ -99,3 +99,10 @@
   background: var(--gold-wash); font-size: 0.86rem; font-variant-numeric: tabular-nums;
 }
 .next-day .was { color: var(--ink-faint); text-decoration: line-through; margin-left: 4px; white-space: nowrap; }
+
+.opening-preview {
+  font-size: 0.86rem; padding: 10px 12px; border-radius: var(--radius-sm);
+  background: var(--gold-wash); font-variant-numeric: tabular-nums;
+}
+.opening-preview:empty { display: none; }
+.kpi-sub { font-size: 0.74rem; color: var(--ink-faint); font-variant-numeric: tabular-nums; }

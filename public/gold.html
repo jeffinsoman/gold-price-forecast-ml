@@ -12,7 +12,7 @@
 <body class="gold">
 <header class="topbar">
   <div class="greeting">
-    <p class="eyebrow">XAUUSD · Deriv · AED 200 → AED 100,000</p>
+    <p class="eyebrow" id="eyebrow">XAUUSD · Deriv · AED 200 → AED 100,000</p>
     <h1 id="day-title">Gold challenge</h1>
   </div>
   <div class="topbar-controls">
@@ -30,21 +30,28 @@
   <!-- TODAY -->
   <section id="page-today" class="page">
     <details class="card" id="setup-card">
-      <summary>⚙️ Challenge start</summary>
+      <summary>⚙️ Opening balance &amp; start date</summary>
       <form id="setup-form" class="form">
-        <p class="muted tiny">Day 1 is the start date. Each calendar day after it is the next challenge day.</p>
         <div class="grid">
+          <label class="field">Opening balance (AED) <input type="number" name="startBalance" min="1" max="99999" step="0.01" inputmode="decimal" value="200" required />
+            <span class="quick" id="opening-quick">
+              <button type="button" class="quick-btn" data-amount="200">200</button>
+              <button type="button" class="quick-btn" data-amount="500">500</button>
+              <button type="button" class="quick-btn" data-amount="1000">1,000</button>
+              <button type="button" class="quick-btn" data-amount="5000">5,000</button>
+            </span></label>
           <label class="field">Start date (day 1) <input type="date" name="startDate" required /></label>
-          <label class="field">Starting balance (AED) <input type="number" name="startBalance" min="1" step="0.01" value="200" required /></label>
         </div>
-        <button class="btn primary gold-btn" type="submit">Save start</button>
+        <p class="opening-preview" id="opening-preview"></p>
+        <p class="muted tiny">The whole 100-day plan is worked out again from this amount so it still ends at AED 100,000 on day 100. Each calendar day after the start date is the next challenge day.</p>
+        <button class="btn primary gold-btn" type="submit">Save opening balance</button>
       </form>
     </details>
 
     <article class="hero gold-hero">
       <p class="hero-label">Account balance</p>
       <p class="hero-value" id="balance">—</p>
-      <p class="hero-sum" id="balance-sum">AED 200 start</p>
+      <p class="hero-sum"><span id="balance-sum">AED 200 start</span> <button class="link" type="button" id="edit-opening">Edit opening</button></p>
       <div class="goal-track" aria-hidden="true"><span id="goal-fill"></span></div>
       <p class="hero-note" id="goal-note"></p>
       <p class="pace" id="pace"></p>
@@ -54,7 +61,7 @@
       <header class="card-head"><h2>🎯 <span id="today-title">Day 1 target</span></h2><span class="status-tag" id="today-status"></span></header>
       <div class="kpis">
         <div><p class="kpi-label">Profit needed today</p><p class="kpi-value" id="k-needed">—</p></div>
-        <div><p class="kpi-label">Lot for 100 pts</p><p class="kpi-value" id="k-lot">—</p></div>
+        <div><p class="kpi-label">Lot to place (0.01 steps)</p><p class="kpi-value" id="k-lot">—</p><p class="kpi-sub" id="k-tp"></p></div>
         <div><p class="kpi-label">End-of-day target</p><p class="kpi-value" id="k-target">—</p></div>
         <div><p class="kpi-label">P&amp;L today</p><p class="kpi-value" id="k-today">—</p></div>
       </div>
@@ -79,7 +86,7 @@
       <article class="wallet"><span class="wallet-icon" aria-hidden="true">🧾</span><div><p class="wallet-label">Trades</p><p class="wallet-value" id="s-trades">—</p></div></article>
     </div>
 
-    <p class="warning">⚠️ This is a mathematical target plan, not a guarantee. AED 200 → AED 100,000 is a 500× increase. The lot sizes are what one 100-point winning move needs to hit the day's profit. They are <strong>not</strong> safe lot sizes and do not allow for spread, slippage, stop-loss distance or losing trades.</p>
+    <p class="warning">⚠️ This is a mathematical target plan, not a guarantee. <span id="warn-growth">AED 200 → AED 100,000 is a 500× increase.</span> The lot sizes are what one 100-point winning move needs to hit the day's profit. They are <strong>not</strong> safe lot sizes and do not allow for spread, slippage, stop-loss distance or losing trades.</p>
   </section>
 
   <!-- TRADES -->
@@ -123,10 +130,10 @@
   <section id="page-plan" class="page hidden">
     <section class="card">
       <header class="card-head"><h2>100-day plan</h2><span class="muted tiny" id="rate-label"></span></header>
-      <p class="muted tiny">1.00 lot = AED 367 for a 100-point move (0.01 lot = AED 3.67). Lot = day's target profit ÷ 367. <b>Your target / Your lot</b> start from the balance you actually hold: profit above a target carries forward and cuts the next days (shown in green).<br />✅ hit or covered · 🟡 below target · 🔻 loss · ⏭️ no trade · ⏳ upcoming</p>
+      <p class="muted tiny">1.00 lot = AED 367 for a 100-point move (0.01 lot = AED 3.67). PDF lot = day's target profit ÷ 367. <b>Your lot</b> is that rounded up to Deriv's 0.01 steps (never below 0.01), and <b>TP pts</b> is how far price must move at that lot to reach the target. <b>Your target / Your lot</b> start from the balance you actually hold: profit above a target carries forward and cuts the next days (shown in green).<br />✅ hit or covered · 🟡 below target · 🔻 loss · ⏭️ no trade · ⏳ upcoming</p>
       <div class="table-wrap">
         <table class="plan-table">
-          <thead><tr><th>Day</th><th>Start</th><th>Target profit</th><th>Target</th><th>Lot</th><th>Your target</th><th>Your lot</th><th>Your P&amp;L</th><th>Balance</th><th></th></tr></thead>
+          <thead><tr><th>Day</th><th>Start</th><th>Target profit</th><th>Target</th><th>Lot</th><th>Your target</th><th>Your lot</th><th>TP pts</th><th>Your P&amp;L</th><th>Balance</th><th></th></tr></thead>
           <tbody id="plan-body"></tbody>
         </table>
       </div>
