@@ -29,6 +29,7 @@ import {
   validateEntry,
   validateOpening,
 } from "./summary.js";
+import { GOLD_START, challengeState, validateGoldSettings, validateTrade } from "./gold.js";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" };
 
@@ -77,6 +78,12 @@ function ensureSchema(db) {
           " date TEXT NOT NULL, month TEXT NOT NULL, amount REAL NOT NULL CHECK (amount > 0)," +
           " note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now'))," +
           " method TEXT NOT NULL DEFAULT 'Credit Card', card TEXT NOT NULL DEFAULT '')",
+      ),
+      db.prepare(
+        "CREATE TABLE IF NOT EXISTS gold_trade (id INTEGER PRIMARY KEY AUTOINCREMENT," +
+          " date TEXT NOT NULL, day INTEGER NOT NULL, direction TEXT NOT NULL DEFAULT 'Buy'," +
+          " lot REAL NOT NULL CHECK (lot > 0), entry REAL, exit REAL, pnl REAL NOT NULL," +
+          " note TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL DEFAULT (datetime('now')))",
       ),
     ]);
 
@@ -258,6 +265,22 @@ async function availableMonths(db) {
   months.add(current);
   months.add(addMonths([...months].sort().pop() ?? current, 1));
   return [...months].sort().reverse();
+}
+
+/** The gold challenge: settings, every trade, and where it all stands. */
+async function goldData(db) {
+  const [stored, trades] = await db.batch([
+    db.prepare("SELECT key, value FROM settings WHERE key LIKE 'gold:%'"),
+    db.prepare("SELECT * FROM gold_trade ORDER BY date DESC, id DESC"),
+  ]);
+  const settings = Object.fromEntries(stored.results.map((row) => [row.key.slice("gold:".length), row.value]));
+  const startDate = settings.startDate || today();
+  const startBalance = Number(settings.startBalance) || GOLD_START;
+  return {
+    started: Boolean(settings.startDate),
+    trades: trades.results,
+    ...challengeState({ trades: trades.results, startBalance, startDate, today: today() }),
+  };
 }
 
 // -------------------------------------------------------------------
@@ -462,6 +485,60 @@ async function handleApi(request, env, url) {
 
     const row = await db.prepare(`SELECT month FROM ${table} WHERE id = ?1`).bind(Number(id)).first();
     return json({ id: Number(id), [column]: Boolean(value), ...(await monthData(db, row.month)) });
+  }
+
+  // GET /api/gold - the whole gold challenge in one answer.
+  if (method === "GET" && path === "gold") {
+    return json(await goldData(db));
+  }
+
+  // PUT /api/gold/settings - when day 1 was, and what the account started with.
+  if (method === "PUT" && path === "gold/settings") {
+    const saved = validateGoldSettings(await readJson(request));
+    await db.batch(
+      Object.entries(saved).map(([key, value]) =>
+        db
+          .prepare(
+            "INSERT INTO settings (key, value) VALUES (?1, ?2)" +
+              " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+          )
+          .bind(`gold:${key}`, String(value)),
+      ),
+    );
+    return json(await goldData(db));
+  }
+
+  // POST /api/gold/trades | PATCH|DELETE /api/gold/trades/12
+  const goldTrade = path.match(/^gold\/trades\/(\d+)$/);
+  if (method === "POST" && path === "gold/trades") {
+    const row = validateTrade(await readJson(request));
+    await db
+      .prepare(
+        "INSERT INTO gold_trade (date, day, direction, lot, entry, exit, pnl, note)" +
+          " VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+      )
+      .bind(row.date, row.day, row.direction, row.lot, row.entry, row.exit, row.pnl, row.note)
+      .run();
+    return json(await goldData(db), 201);
+  }
+
+  if (method === "PATCH" && goldTrade) {
+    const row = validateTrade(await readJson(request));
+    const result = await db
+      .prepare(
+        "UPDATE gold_trade SET date = ?1, day = ?2, direction = ?3, lot = ?4, entry = ?5, exit = ?6," +
+          " pnl = ?7, note = ?8 WHERE id = ?9",
+      )
+      .bind(row.date, row.day, row.direction, row.lot, row.entry, row.exit, row.pnl, row.note, Number(goldTrade[1]))
+      .run();
+    if (!result.meta.changes) return fail("That trade no longer exists.", 404);
+    return json(await goldData(db));
+  }
+
+  if (method === "DELETE" && goldTrade) {
+    const result = await db.prepare("DELETE FROM gold_trade WHERE id = ?1").bind(Number(goldTrade[1])).run();
+    if (!result.meta.changes) return fail("That trade no longer exists.", 404);
+    return json(await goldData(db));
   }
 
   // POST /api/reset - empties the tracker. Needs the word RESET to go through.

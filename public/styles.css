@@ -80,6 +80,10 @@ p { margin: 0; }
   border-radius: 999px; padding: 7px 12px;
 }
 .topbar-controls input { width: 64px; text-align: center; }
+.gold-link {
+  text-decoration: none; font-size: 0.95rem; line-height: 1;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 7px 10px;
+}
 
 main { max-width: 760px; margin: 0 auto; padding: 0 18px; }
 .page { display: flex; flex-direction: column; gap: 16px; }
