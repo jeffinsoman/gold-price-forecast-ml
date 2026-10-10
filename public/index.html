@@ -26,6 +26,7 @@
   <button class="tab" data-page="income"><span aria-hidden="true">💰</span><span>Income</span></button>
   <button class="tab" data-page="expense"><span aria-hidden="true">🧾</span><span>Expense</span></button>
   <button class="tab" data-page="friends"><span aria-hidden="true">🤝</span><span>Friends</span></button>
+  <button class="tab" data-page="buy"><span aria-hidden="true">🛍️</span><span>To buy</span></button>
 </nav>
 
 <main>
@@ -229,6 +230,39 @@
       </header>
       <p class="muted tiny">Put a name on an expense when money goes out to someone, and on the income when it comes back. Every month counts towards this.</p>
       <ul class="lines" id="friends-list"></ul>
+    </section>
+  </section>
+
+  <!-- TO BUY -->
+  <section id="page-buy" class="page hidden">
+    <form id="buy-form" class="card form">
+      <h2>Add something to buy</h2>
+      <label class="field">What to buy <input type="text" name="item" maxlength="80" placeholder="Dates box" required /></label>
+      <div class="grid">
+        <label class="field">Who is it for <input type="text" name="who" maxlength="40" list="buy-targets" placeholder="Friends" /></label>
+        <label class="field">Price (optional) <input type="number" name="amount" min="0" step="0.01" inputmode="decimal" placeholder="0" /></label>
+      </div>
+      <label class="field">Note (optional) <input type="text" name="note" maxlength="200" /></label>
+      <datalist id="buy-targets"></datalist>
+      <button class="btn primary" type="submit">Add to the list</button>
+      <p class="form-msg" id="buy-msg"></p>
+    </form>
+
+    <section class="card">
+      <header class="card-head">
+        <h2>Still to buy</h2>
+        <span class="card-total" id="buy-total">—</span>
+      </header>
+      <p class="muted tiny">Tick an item once you have bought it. The list stays as it is from month to month.</p>
+      <div id="buy-list"></div>
+    </section>
+
+    <section class="card" id="bought-card" hidden>
+      <header class="card-head">
+        <h2>Bought</h2>
+        <span class="card-total" id="bought-total">—</span>
+      </header>
+      <div id="bought-list"></div>
     </section>
   </section>
 </main>

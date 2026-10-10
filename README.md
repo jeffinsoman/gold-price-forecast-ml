@@ -67,7 +67,7 @@ This terminal operates on four distinct analytical layers:
 
 ## Money — an income vs expense tracker (Cloudflare Workers + D1)
 
-Four tabs, one question: **how much is left this month?**
+Five tabs, one question: **how much is left this month?**
 A Worker serves the API, D1 stores the entries, and the page is plain static HTML/CSS/JS — no build
 step and no framework.
 
@@ -129,6 +129,16 @@ what you owe.
 Put a name on an expense when money goes out to someone, and on the income when it comes back. The
 tab nets the two per person across every month — *AED 500 owed to you*, or *settled*.
 
+### 🛍️ To buy
+A standing list of things to get — before a trip, for the house, for friends. Each line is an item,
+who it is for and a price if you know it; **tick the box** once you have bought it and it moves down
+to **Bought**, struck through with the date. Untick to put it back. The list is grouped by who the
+items are for, the header counts what is left and what it adds up to, and nothing on it resets when
+the month turns over.
+
+Ticking an item does not write an expense — the list is for keeping track of what to get, and the
+money side stays where you record it.
+
 ### Design notes
 The palette is a two-pole pair — teal-green for money in, coral for money out, indigo for controls —
 with separate steps for dark mode rather than an automatic flip. Both sets were checked with the
@@ -165,4 +175,6 @@ At the foot of the Dashboard: deletes every entry in every month, two taps, no u
 | GET · PUT | `/api/plans` | `{ "<plan>": { outstanding, monthly } }` — what is owed on each loan or card |
 | POST | `/api/bill-payments` | `{ card, date, amount, note }` — settles one card's bill from the bank |
 | DELETE | `/api/bill-payments/:id` | Undo a card payment |
+| GET · POST | `/api/purchases` | The shopping list · `{ item, who, amount, note }` |
+| PATCH · DELETE | `/api/purchases/:id` | `{ bought }` — tick an item off, or drop it |
 | POST | `/api/reset` | `{ "confirm": "RESET" }` — empties the tracker |

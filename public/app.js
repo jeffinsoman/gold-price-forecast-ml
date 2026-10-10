@@ -528,6 +528,7 @@ async function loadMonth(month) {
   );
 
   showPlans(data.plans ?? { list: [], left: 0, dueThisMonth: 0 });
+  showPurchases(data.purchases ?? { list: [], summary: null });
 
   const opening = accounts.opening ?? {};
   const openingForm = $("opening-form");
@@ -754,6 +755,113 @@ function bindPlansForm() {
   });
 }
 
+// The shopping list: things to buy before a trip or an occasion, grouped by
+// who they are for. Ticking one off is the whole of it.
+function buyRow(row) {
+  const item = document.createElement("label");
+  item.className = `buy${row.bought ? " is-bought" : ""}`;
+
+  const box = document.createElement("input");
+  box.type = "checkbox";
+  box.checked = Boolean(row.bought);
+  box.addEventListener("change", async () => {
+    box.disabled = true;
+    try {
+      await api(`/purchases/${row.id}`, { method: "PATCH", body: JSON.stringify({ bought: box.checked ? 1 : 0 }) });
+      toast(box.checked ? `🛍️ Bought ${row.item}.` : `↩️ ${row.item} is back on the list.`);
+      await loadMonth(state.month);
+    } catch (error) {
+      box.checked = !box.checked;
+      toast(error.message, "bad");
+    } finally {
+      box.disabled = false;
+    }
+  });
+
+  const main = document.createElement("div");
+  main.className = "buy-main";
+  main.innerHTML =
+    `<p class="buy-item">${row.item}</p>` +
+    `<p class="entry-sub">${[row.who, row.note, row.bought && row.bought_at ? `bought ${dayLabel(row.bought_at)}` : ""]
+      .filter(Boolean)
+      .join(" · ")}</p>`;
+
+  const right = document.createElement("div");
+  right.className = "entry-right";
+  if (row.amount) right.innerHTML = `<span class="entry-amount">${money(row.amount)}</span>`;
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "link danger";
+  remove.textContent = "Remove";
+  remove.addEventListener("click", async (event) => {
+    event.preventDefault();
+    await api(`/purchases/${row.id}`, { method: "DELETE" });
+    toast(`Removed ${row.item} from the list.`);
+    await loadMonth(state.month);
+  });
+  right.append(remove);
+
+  item.append(box, main, right);
+  return item;
+}
+
+function showPurchases(purchases) {
+  const rows = purchases.list ?? [];
+  const totals = purchases.summary ?? { toBuy: 0, bought: 0, toBuyAmount: 0, boughtAmount: 0, groups: [] };
+
+  const open = [];
+  for (const group of totals.groups ?? []) {
+    const items = group.items.filter((row) => !row.bought);
+    if (!items.length) continue;
+    if (group.who) {
+      const head = document.createElement("p");
+      head.className = "buy-group";
+      head.textContent = group.who;
+      open.push(head);
+    }
+    open.push(...items.map(buyRow));
+  }
+  $("buy-list").replaceChildren(...(open.length ? open : [empty("Nothing on the list yet.")]));
+  $("buy-total").textContent = totals.toBuy
+    ? `${totals.toBuy} to buy${totals.toBuyAmount ? ` · ${money(totals.toBuyAmount)}` : ""}`
+    : "all done";
+
+  const done = rows.filter((row) => row.bought);
+  $("bought-card").hidden = done.length === 0;
+  $("bought-list").replaceChildren(...done.map(buyRow));
+  $("bought-total").textContent = `${done.length} bought${totals.boughtAmount ? ` · ${money(totals.boughtAmount)}` : ""}`;
+
+  // Names already used make the next item quicker to add.
+  const names = new Set([...(state.options.purchaseTargets ?? []), ...rows.map((row) => row.who).filter(Boolean)]);
+  $("buy-targets").innerHTML = [...names].map((name) => `<option value="${name}"></option>`).join("");
+}
+
+function bindBuyForm() {
+  const form = $("buy-form");
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      const result = await api("/purchases", {
+        method: "POST",
+        body: JSON.stringify({
+          item: form.item.value,
+          who: form.who.value,
+          amount: form.amount.value,
+          note: form.note.value,
+        }),
+      });
+      const who = result.item.who ? ` for ${result.item.who}` : "";
+      message($("buy-msg"), `🛍️ ${result.item.item}${who} is on the list.`);
+      toast(`🛍️ ${result.item.item}${who} is on the list.`);
+      form.reset();
+      form.item.focus();
+      await loadMonth(state.month);
+    } catch (error) {
+      message($("buy-msg"), error.message, false);
+    }
+  });
+}
+
 function bindOpeningForm() {
   const form = $("opening-form");
   form.addEventListener("submit", async (event) => {
@@ -901,6 +1009,7 @@ async function boot() {
     );
     bindOpeningForm();
     bindPlansForm();
+    bindBuyForm();
     bindCardForm();
     bindReset();
     $("month-picker").addEventListener("change", (event) => loadMonth(event.target.value));

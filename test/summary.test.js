@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   CARDS,
   PLANS,
+  PURCHASE_TARGETS,
   EXPENSE_CATEGORIES,
   EXPENSE_METHODS,
   accountBalances,
@@ -16,11 +17,13 @@ import {
   monthLabel,
   summarize,
   planState,
+  purchaseSummary,
   planTotals,
   validateBillPayment,
   validateEntry,
   validateOpening,
   validatePlans,
+  validatePurchase,
 } from "../worker/summary.js";
 
 test("month keys, labels and shifts", () => {
@@ -545,4 +548,64 @@ test("a plan payment is an ordinary expense that names its plan", () => {
   });
   assert.equal(held.balances.Bank, 23700);
   assert.equal(held.billsPending, 0);
+});
+
+test("the shopping list keeps what to buy and what is bought apart", () => {
+  const rows = [
+    { item: "Dates box", who: "Friends", amount: 120, bought: 0 },
+    { item: "Perfume", who: "Friends", amount: 300, bought: 1 },
+    { item: "Bedsheets", who: "House", amount: 450, bought: 0 },
+    { item: "Suitcase", who: "Travel", amount: 0, bought: 0 },
+  ];
+  const list = purchaseSummary(rows);
+  assert.equal(list.total, 4);
+  assert.equal(list.toBuy, 3);
+  assert.equal(list.bought, 1);
+  assert.equal(list.toBuyAmount, 570);
+  assert.equal(list.boughtAmount, 300);
+  assert.equal(list.amount, 870);
+
+  // One group per "who it is for", in the order the list first mentions them.
+  assert.deepEqual(
+    list.groups.map((group) => [group.who, group.toBuy, group.total]),
+    [["Friends", 1, 420], ["House", 1, 450], ["Travel", 1, 0]],
+  );
+
+  // Items with nobody named sit in a group of their own.
+  const loose = purchaseSummary([{ item: "Batteries", amount: 20, bought: 0 }]);
+  assert.equal(loose.groups[0].who, "");
+  assert.equal(loose.toBuyAmount, 20);
+
+  const nothing = purchaseSummary();
+  assert.equal(nothing.total, 0);
+  assert.deepEqual(nothing.groups, []);
+});
+
+test("an item needs a name, and a price only if you know it", () => {
+  assert.deepEqual(validatePurchase({ item: "  Dates box  ", who: " Friends ", amount: "120" }), {
+    item: "Dates box",
+    who: "Friends",
+    amount: 120,
+    note: "",
+    bought: 0,
+  });
+
+  // A price is optional, and an item starts off unbought.
+  const plain = validatePurchase({ item: "Suitcase" });
+  assert.equal(plain.amount, 0);
+  assert.equal(plain.who, "");
+  assert.equal(plain.bought, 0);
+  assert.equal(validatePurchase({ item: "Perfume", bought: 1 }).bought, 1);
+
+  assert.throws(() => validatePurchase({ item: "   " }), /Write what to buy/);
+  assert.throws(() => validatePurchase({}), /Write what to buy/);
+  assert.throws(() => validatePurchase({ item: "Rug", amount: -5 }), /zero or more/);
+  assert.throws(() => validatePurchase({ item: "Rug", amount: "cheap" }), /zero or more/);
+
+  // Long names are trimmed to something a row can show.
+  assert.equal(validatePurchase({ item: "x".repeat(200) }).item.length, 80);
+  assert.equal(validatePurchase({ item: "Rug", who: "y".repeat(80) }).who.length, 40);
+
+  assert.ok(PURCHASE_TARGETS.includes("House"));
+  assert.ok(PURCHASE_TARGETS.includes("Friends"));
 });

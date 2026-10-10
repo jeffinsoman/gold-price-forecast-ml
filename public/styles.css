@@ -200,6 +200,16 @@ main { max-width: 760px; margin: 0 auto; padding: 0 18px; }
 /* ---------------------------------------------------------------- forms */
 .form { display: flex; flex-direction: column; gap: 15px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 13px; }
+.buy { display: flex; align-items: flex-start; gap: 11px; padding: 11px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.buy:last-child { border-bottom: 0; }
+.buy input[type="checkbox"] { width: 21px; height: 21px; margin-top: 2px; accent-color: var(--in); flex: 0 0 auto; cursor: pointer; }
+.buy-main { flex: 1 1 auto; min-width: 0; }
+.buy-item { margin: 0; font-weight: 620; color: var(--ink); font-size: 0.95rem; }
+.buy.is-bought .buy-item { text-decoration: line-through; color: var(--ink-soft); font-weight: 500; }
+.buy.is-bought .entry-amount { color: var(--ink-soft); }
+.buy-group { margin: 14px 0 2px; font-size: 0.74rem; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-soft); }
+.buy-group:first-child { margin-top: 4px; }
+
 .plan { padding: 12px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 9px; }
 .plan:last-child { border-bottom: 0; }
 .plan-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px; margin: 0; }
@@ -272,7 +282,7 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 /* ---------------------------------------------------------------- tab bar */
 .tabbar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  display: grid; grid-template-columns: repeat(5, 1fr);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(14px);
   border-top: 1px solid var(--line);

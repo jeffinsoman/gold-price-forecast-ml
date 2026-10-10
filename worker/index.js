@@ -10,9 +10,12 @@ import {
   LEGACY_CARD,
   cardName,
   PLANS,
+  PURCHASE_TARGETS,
   PLAN_CATEGORY,
   planTotals,
+  purchaseSummary,
   validatePlans,
+  validatePurchase,
   INCOME_ACCOUNTS as ACCOUNTS,
   accountBalances,
   addMonths,
@@ -63,6 +66,12 @@ function ensureSchema(db) {
     // migrations/ is repeated here, written to be safe to run again.
     await db.batch([
       db.prepare("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)"),
+      db.prepare(
+        "CREATE TABLE IF NOT EXISTS purchase (id INTEGER PRIMARY KEY AUTOINCREMENT," +
+          " item TEXT NOT NULL, who TEXT NOT NULL DEFAULT '', amount REAL NOT NULL DEFAULT 0," +
+          " note TEXT NOT NULL DEFAULT '', bought INTEGER NOT NULL DEFAULT 0, bought_at TEXT," +
+          " created_at TEXT NOT NULL DEFAULT (datetime('now')))",
+      ),
       db.prepare(
         "CREATE TABLE IF NOT EXISTS card_payment (id INTEGER PRIMARY KEY AUTOINCREMENT," +
           " date TEXT NOT NULL, month TEXT NOT NULL, amount REAL NOT NULL CHECK (amount > 0)," +
@@ -181,6 +190,14 @@ async function billsPending(db) {
   return owed;
 }
 
+/** The shopping list, still to buy first, with what it adds up to. */
+async function purchases(db) {
+  const { results } = await db
+    .prepare("SELECT * FROM purchase ORDER BY bought ASC, who ASC, id ASC")
+    .all();
+  return { list: results, summary: purchaseSummary(results) };
+}
+
 /** Everything tagged with a name, netted per friend, across every month. */
 async function friends(db) {
   const [out, back] = await db.batch([
@@ -191,7 +208,7 @@ async function friends(db) {
 }
 
 async function monthData(db, month) {
-  const [income, expense, accounts, withFriends, payments, pending, plan] = await Promise.all([
+  const [income, expense, accounts, withFriends, payments, pending, plan, list] = await Promise.all([
     db.prepare("SELECT * FROM income WHERE month = ?1 ORDER BY date DESC, id DESC").bind(month).all(),
     db.prepare("SELECT * FROM expense WHERE month = ?1 ORDER BY date DESC, id DESC").bind(month).all(),
     held(db, month),
@@ -199,6 +216,7 @@ async function monthData(db, month) {
     db.prepare("SELECT * FROM card_payment WHERE month = ?1 ORDER BY date DESC, id DESC").bind(month).all(),
     billsPending(db),
     plans(db, month),
+    purchases(db),
   ]);
 
   const total = (rows) => rows.reduce((sum, row) => sum + Number(row.amount), 0);
@@ -225,6 +243,7 @@ async function monthData(db, month) {
     },
     billPayments: payments.results,
     plans: plan,
+    purchases: list,
     friends: withFriends,
   };
 }
@@ -261,6 +280,7 @@ async function handleApi(request, env, url) {
       friends: (await friends(db)).map((row) => row.friend),
       options: {
         plans: PLANS,
+        purchaseTargets: PURCHASE_TARGETS,
         planCategories: PLAN_CATEGORY,
         incomeAccounts: INCOME_ACCOUNTS,
         expenseMethods: EXPENSE_METHODS,
@@ -349,6 +369,38 @@ async function handleApi(request, env, url) {
     return json({ opening, ...(await monthData(db, monthKey(today()))) });
   }
 
+  // GET|POST /api/purchases - the list of things to buy. PATCH ticks one off.
+  if (method === "GET" && path === "purchases") {
+    return json(await purchases(db));
+  }
+
+  if (method === "POST" && path === "purchases") {
+    const row = validatePurchase(await readJson(request));
+    const result = await db
+      .prepare("INSERT INTO purchase (item, who, amount, note, bought) VALUES (?1, ?2, ?3, ?4, ?5)")
+      .bind(row.item, row.who, row.amount, row.note, row.bought)
+      .run();
+    return json({ id: result.meta.last_row_id, item: row, ...(await monthData(db, monthKey(today()))) }, 201);
+  }
+
+  const buy = path.match(/^purchases\/(\d+)$/);
+  if (method === "PATCH" && buy) {
+    const body = await readJson(request);
+    const bought = isSettled(body?.bought);
+    const result = await db
+      .prepare("UPDATE purchase SET bought = ?1, bought_at = ?2 WHERE id = ?3")
+      .bind(bought, bought ? today() : null, Number(buy[1]))
+      .run();
+    if (!result.meta.changes) return fail("That item is no longer on the list.", 404);
+    return json({ id: Number(buy[1]), bought, ...(await monthData(db, monthKey(today()))) });
+  }
+
+  if (method === "DELETE" && buy) {
+    const result = await db.prepare("DELETE FROM purchase WHERE id = ?1").bind(Number(buy[1])).run();
+    if (!result.meta.changes) return fail("That item is no longer on the list.", 404);
+    return json({ deleted: Number(buy[1]) });
+  }
+
   // GET|PUT /api/plans - what is owed on each loan or card, and the instalment.
   if (method === "GET" && path === "plans") {
     return json({ plans: await plans(db, monthKey(today())) });
@@ -425,6 +477,7 @@ async function handleApi(request, env, url) {
       "income",
       "expense",
       "card_payment",
+      "purchase",
       "settings",
       "budget",
       "loan_repayment",

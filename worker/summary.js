@@ -398,6 +398,60 @@ export function planName(value) {
   return name;
 }
 
+// Things to buy before a trip or an occasion: an item, who it is for, and a
+// price if you know it. Ticking one off is all the list asks for.
+export const PURCHASE_TARGETS = ["House", "Friends", "Family", "Gift", "Travel", "Other"];
+
+/** One item on the list, trimmed to what a row can show. */
+export function validatePurchase(body) {
+  const item = String(body?.item ?? "").trim().slice(0, 80);
+  if (!item) throw new Error("Write what to buy.");
+
+  const raw = body?.amount;
+  const amount = raw === "" || raw === null || raw === undefined ? 0 : Number(raw);
+  if (!Number.isFinite(amount) || amount < 0) throw new Error("Price must be zero or more.");
+
+  return {
+    item,
+    who: String(body?.who ?? "").trim().slice(0, 40),
+    amount: Math.round(amount * 100) / 100,
+    note: String(body?.note ?? "").trim().slice(0, 200),
+    bought: isSettled(body?.bought === undefined ? 0 : body.bought),
+  };
+}
+
+/** What the list adds up to: still to buy, already bought, and by whom for. */
+export function purchaseSummary(rows = []) {
+  const round = (value) => Math.round(value * 100) / 100;
+  const open = rows.filter((row) => !row.bought);
+  const done = rows.filter((row) => row.bought);
+  const sum = (list) => round(list.reduce((total, row) => total + (Number(row.amount) || 0), 0));
+
+  // One group per "who it is for", in the order the list first mentions them.
+  const groups = [];
+  for (const row of rows) {
+    const who = String(row.who ?? "").trim();
+    let group = groups.find((one) => one.who === who);
+    if (!group) {
+      group = { who, items: [], toBuy: 0, total: 0 };
+      groups.push(group);
+    }
+    group.items.push(row);
+    if (!row.bought) group.toBuy += 1;
+    group.total = round(group.total + (Number(row.amount) || 0));
+  }
+
+  return {
+    total: rows.length,
+    toBuy: open.length,
+    bought: done.length,
+    toBuyAmount: sum(open),
+    boughtAmount: sum(done),
+    amount: sum(rows),
+    groups,
+  };
+}
+
 /** An opening balance is a plain number per account, and may be negative. */
 export function validateOpening(body) {
   const opening = {};
